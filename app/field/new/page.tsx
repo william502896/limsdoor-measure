@@ -1194,672 +1194,691 @@ ${payload}`;
     ]);
 
     return (
-        <main className={styles.container}>
-            <section className={styles.card}>
-                <header className={styles.header}>
-                    <h1 className={styles.title}>현장 실측 입력</h1>
-                    <p className={styles.subtitle}>옵션 → 레이저레벨 사진 → 실측 → 현장사진 → 일정/결재 → 고객 확인(견적/서명) → 전송</p>
+        <>
+            <div
+                style={{
+                    position: "fixed",
+                    bottom: 8,
+                    right: 8,
+                    zIndex: 999999,
+                    fontSize: "12px",
+                    background: "red",
+                    color: "#fff",
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    fontWeight: "bold",
+                    pointerEvents: "none",
+                }}
+            >
+                BUILD 2025-12-22 AR STEP 🔥
+            </div>
+            <main className={styles.container}>
+                <section className={styles.card}>
+                    <header className={styles.header}>
+                        <h1 className={styles.title}>현장 실측 입력</h1>
+                        <p className={styles.subtitle}>옵션 → 레이저레벨 사진 → 실측 → 현장사진 → 일정/결재 → 고객 확인(견적/서명) → 전송</p>
 
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                        <a className={styles.buttonGhost} href="/admin">
-                            ⚙️ 관리자 설정(사무실/실측자)
-                        </a>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                            <a className={styles.buttonGhost} href="/admin">
+                                ⚙️ 관리자 설정(사무실/실측자)
+                            </a>
 
-                        <label className={styles.buttonGhost} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <input type="checkbox" checked={voiceEnabled} onChange={(e) => setVoiceEnabled(e.target.checked)} />
-                            🔊 음성 안내
-                        </label>
-
-                        <button
-                            type="button"
-                            className={styles.buttonGhost}
-                            style={{ borderColor: "#3b82f6", color: "#3b82f6", cursor: "pointer" }}
-                            onClick={() => {
-                                // Pass current door type options to AR page
-                                const params = new URLSearchParams();
-                                if (category) params.set("category", category);
-                                if (type) params.set("doorType", type);
-                                window.location.href = `/field/ar?${params.toString()}`;
-                            }}
-                        >
-                            📏 AR 실측(AI 측정)
-                        </button>
-                    </div>
-                </header>
-
-                <form className={styles.form} onSubmit={onSubmit}>
-                    {/* 고객정보 */}
-                    <div className={styles.sectionTitle}>고객 정보</div>
-                    <div className={styles.grid2}>
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>고객명</span>
-                            <input className={styles.input} value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="예: 홍길동" />
-                        </label>
-
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>연락처</span>
-                            <input className={styles.input} value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="예: 010-1234-5678" />
-                        </label>
-
-                        <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                            <span className={styles.labelText}>주소</span>
-                            <input
-                                className={styles.input}
-                                value={customerAddress}
-                                onChange={(e) => setCustomerAddress(e.target.value)}
-                                placeholder="예: 구리시 한양아파트 101동 201호"
-                            />
-                        </label>
-
-                        <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button
-                                type="button"
-                                className={styles.buttonGhost}
-                                onClick={async () => {
-                                    try {
-                                        const { lat, lng } = await getCurrentCoords();
-                                        openKakaoMaps(lat, lng);
-                                    } catch {
-                                        alert("위치 권한이 필요합니다.\n브라우저 또는 기기 설정에서 위치 접근을 허용해주세요.");
-                                    }
-                                }}
-                            >
-                                📍 GPS로 카카오지도 열기
-                            </button>
+                            <label className={styles.buttonGhost} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <input type="checkbox" checked={voiceEnabled} onChange={(e) => setVoiceEnabled(e.target.checked)} />
+                                🔊 음성 안내
+                            </label>
 
                             <button
                                 type="button"
                                 className={styles.buttonGhost}
-                                onClick={async () => {
-                                    try {
-                                        const { lat, lng } = await getCurrentCoords();
-                                        openNaverMaps(lat, lng);
-                                    } catch {
-                                        alert("위치 권한이 필요합니다.");
-                                    }
+                                style={{ borderColor: "#3b82f6", color: "#3b82f6", cursor: "pointer" }}
+                                onClick={() => {
+                                    // Pass current door type options to AR page
+                                    const params = new URLSearchParams();
+                                    if (category) params.set("category", category);
+                                    if (type) params.set("doorType", type);
+                                    window.location.href = `/field/ar?${params.toString()}`;
                                 }}
                             >
-                                네이버지도
-                            </button>
-
-                            <button
-                                type="button"
-                                className={styles.buttonGhost}
-                                onClick={async () => {
-                                    try {
-                                        const { lat, lng } = await getCurrentCoords();
-                                        openGoogleMaps(lat, lng);
-                                    } catch {
-                                        alert("위치 권한이 필요합니다.");
-                                    }
-                                }}
-                            >
-                                구글지도
+                                📏 AR 실측(AI 측정)
                             </button>
                         </div>
-                    </div>
+                    </header>
 
-                    {/* 실측자 */}
-                    <div className={styles.sectionTitle}>실측자 정보(자동 기입)</div>
-                    <div className={styles.grid2}>
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>실측자 이름</span>
-                            <input className={styles.input} value={measurerName} onChange={(e) => setMeasurerName(e.target.value)} placeholder="예: 임도경" />
-                        </label>
+                    <form className={styles.form} onSubmit={onSubmit}>
+                        {/* 고객정보 */}
+                        <div className={styles.sectionTitle}>고객 정보</div>
+                        <div className={styles.grid2}>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>고객명</span>
+                                <input className={styles.input} value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="예: 홍길동" />
+                            </label>
 
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>실측자 연락처</span>
-                            <input className={styles.input} value={measurerPhone} onChange={(e) => setMeasurerPhone(e.target.value)} placeholder="예: 010-0000-0000" />
-                        </label>
-                    </div>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>연락처</span>
+                                <input className={styles.input} value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="예: 010-1234-5678" />
+                            </label>
 
-                    {/* 옵션 */}
-                    <div className={styles.sectionTitle}>옵션</div>
-                    <div className={styles.grid2}>
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>시공 위치</span>
-                            <select className={styles.select} value={installLocation} onChange={(e) => setInstallLocation(e.target.value as InstallLocation)}>
-                                <option value="현관">현관</option>
-                                <option value="드레스룸">드레스룸</option>
-                                <option value="알파룸">알파룸</option>
-                                <option value="거실">거실</option>
-                            </select>
-                        </label>
+                            <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                                <span className={styles.labelText}>주소</span>
+                                <input
+                                    className={styles.input}
+                                    value={customerAddress}
+                                    onChange={(e) => setCustomerAddress(e.target.value)}
+                                    placeholder="예: 구리시 한양아파트 101동 201호"
+                                />
+                            </label>
 
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>수량(조)</span>
-                            <select className={styles.select} value={String(quantity)} onChange={(e) => setQuantity(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}>
-                                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                                    <option key={n} value={String(n)}>
-                                        {n}조
-                                    </option>
-                                ))}
-                            </select>
-                            <p className={styles.hint}>※ 2조 이상 구매도 선택 가능합니다.</p>
-                        </label>
+                            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                    type="button"
+                                    className={styles.buttonGhost}
+                                    onClick={async () => {
+                                        try {
+                                            const { lat, lng } = await getCurrentCoords();
+                                            openKakaoMaps(lat, lng);
+                                        } catch {
+                                            alert("위치 권한이 필요합니다.\n브라우저 또는 기기 설정에서 위치 접근을 허용해주세요.");
+                                        }
+                                    }}
+                                >
+                                    📍 GPS로 카카오지도 열기
+                                </button>
 
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>문 종류</span>
-                            <select className={styles.select} value={category} onChange={(e) => setCategory(e.target.value as DoorCategory)}>
-                                <option value="자동문">자동문</option>
-                                <option value="수동문">수동문</option>
-                                <option value="파티션">파티션</option>
-                            </select>
-                        </label>
+                                <button
+                                    type="button"
+                                    className={styles.buttonGhost}
+                                    onClick={async () => {
+                                        try {
+                                            const { lat, lng } = await getCurrentCoords();
+                                            openNaverMaps(lat, lng);
+                                        } catch {
+                                            alert("위치 권한이 필요합니다.");
+                                        }
+                                    }}
+                                >
+                                    네이버지도
+                                </button>
 
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>상세 유형</span>
-                            <select className={styles.select} value={detail} onChange={(e) => setDetail(e.target.value)}>
-                                {DOOR_OPTIONS[category].map((opt) => (
-                                    <option key={opt} value={opt}>
-                                        {opt}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className={styles.hint}>
-                                ✅ 실측 포인트 자동 제안: <b>가로 {req.wReq}포인트 / 세로 {req.hReq}포인트</b>
-                                {detail.includes("원슬라이딩") ? (
-                                    <>
-                                        <br />
-                                        ✅ 원슬라이딩 확정치: <b>가로=최대 / 세로=최소</b> / 기본자재: <b>각바 2EA</b>
-                                    </>
-                                ) : (
-                                    <>
-                                        <br />
-                                        ✅ 확정치: <b>가로=최소 / 세로=최소</b>
-                                    </>
-                                )}
-                            </p>
-                        </label>
-
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>유리 종류</span>
-                            <select className={styles.select} value={glass} onChange={(e) => setGlass(e.target.value)}>
-                                {GLASS_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt}>
-                                        {opt}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>도어 열림 방향</span>
-                            <select className={styles.select} value={openDirection} onChange={(e) => setOpenDirection(e.target.value as OpenDirection)}>
-                                <option value="좌→우 열림">좌에서 우측 열림 (거실→현관 기준)</option>
-                                <option value="우→좌 열림">우에서 좌측 열림 (거실→현관 기준)</option>
-                            </select>
-                            <p className={styles.hint}>
-                                기준: <b>(거실에서 현관을 바로 보며)</b>
-                            </p>
-                        </label>
-
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>현장 할인 종류</span>
-                            <select className={styles.select} value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
-                                <option value="없음">없음</option>
-                                <option value="재구매 고객 할인">재구매 고객 할인</option>
-                                <option value="조건부 현장 할인">조건부 현장 할인</option>
-                                <option value="추가 자재 조건부 무상">추가 자재 조건부 무상</option>
-                                <option value="기타">기타</option>
-                            </select>
-                        </label>
-
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>현장 할인 금액(원)</span>
-                            <input
-                                className={styles.input}
-                                type="number"
-                                inputMode="numeric"
-                                min={0}
-                                value={discountAmountText}
-                                onChange={(e) => setDiscountAmountText(e.target.value)}
-                                placeholder="예: 30000"
-                            />
-                            <p className={styles.hint}>※ 실측자가 현장에서 수동으로 입력합니다.</p>
-                        </label>
-                    </div>
-
-                    {detail.includes("원슬라이딩") && (
-                        <>
-                            <div className={styles.sectionTitle}>원슬라이딩 형태</div>
-                            <div className={styles.grid2}>
-                                <label className={styles.label}>
-                                    <span className={styles.labelText}>형태 선택</span>
-                                    <select className={styles.select} value={slidingMode} onChange={(e) => setSlidingMode(e.target.value as SlidingMode)}>
-                                        <option value="벽부형">벽부형(한쪽 면이 벽면에 닫힘)</option>
-                                        <option value="오픈형">오픈형(좌우 프레임이 벽면에 닫힘)</option>
-                                    </select>
-                                </label>
+                                <button
+                                    type="button"
+                                    className={styles.buttonGhost}
+                                    onClick={async () => {
+                                        try {
+                                            const { lat, lng } = await getCurrentCoords();
+                                            openGoogleMaps(lat, lng);
+                                        } catch {
+                                            alert("위치 권한이 필요합니다.");
+                                        }
+                                    }}
+                                >
+                                    구글지도
+                                </button>
                             </div>
-                        </>
-                    )}
-
-                    {/* Auto-fill from AR */}
-                    <AutoFillFromAR setW={setConfirmedWidth} setH={setConfirmedHeight} />
-
-                    {/* 레이저레벨 사진 */}
-                    <div className={styles.sectionTitle}>실측 전 필수 사진 (레이저 레벨기 측정)</div>
-                    <div className={styles.photoBar}>
-                        <input className={styles.file} type="file" accept="image/*" capture="environment" onChange={(e) => onPickFiles("laser", e.target.files)} />
-                        <div className={styles.photoHint}>✅ 레이저레벨기로 수평/수직 측정하는 장면을 1장 이상 첨부해야 전송 가능합니다.</div>
-                    </div>
-
-                    {laserPhotos.length > 0 && (
-                        <div className={styles.photoGrid}>
-                            {laserPhotos.map((p, idx) => {
-                                const realIdx = previews.findIndex((x) => x.url === p.url);
-                                return (
-                                    <div className={styles.photoItem} key={p.url}>
-                                        <img className={styles.photoImg} src={p.url} alt={`레이저레벨-${idx + 1}`} />
-                                        <button type="button" className={styles.photoRemove} onClick={() => removePreview(realIdx)}>
-                                            삭제
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* 실측 */}
-                    <div className={styles.sectionTitle}>실측 (mm) - 포인트 입력</div>
-                    <div className={styles.grid2}>
-                        <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                            <span className={styles.labelText}>가로 포인트 ({req.wReq}개)</span>
-                            <div className={styles.grid2}>
-                                {widthPoints.map((v, i) => (
-                                    <input
-                                        key={`w-${i}`}
-                                        type="number"
-                                        inputMode="numeric"
-                                        className={styles.input}
-                                        value={v}
-                                        onChange={(e) => setPoint("w", i, e.target.value)}
-                                        placeholder={`가로 ${i + 1}포인트 (예: 1250)`}
-                                    />
-                                ))}
-                            </div>
-                            <p className={styles.hint}>
-                                가로 오차: <b>{wStats.spread ?? 0}mm</b>{" "}
-                                {(wStats.spread ?? 0) >= WARN_PHOTO_REQUIRED_MM
-                                    ? "📸(10mm↑)"
-                                    : (wStats.spread ?? 0) >= WARN_EXTRA_MATERIAL_MM
-                                        ? "⚠️(5mm↑)"
-                                        : ""}
-                            </p>
-                        </label>
-
-                        <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                            <span className={styles.labelText}>세로 포인트 ({req.hReq}개)</span>
-                            <div className={styles.grid2}>
-                                {heightPoints.map((v, i) => (
-                                    <input
-                                        key={`h-${i}`}
-                                        type="number"
-                                        inputMode="numeric"
-                                        className={styles.input}
-                                        value={v}
-                                        onChange={(e) => setPoint("h", i, e.target.value)}
-                                        placeholder={`세로 ${i + 1}포인트 (예: 2300)`}
-                                    />
-                                ))}
-                            </div>
-                            <p className={styles.hint}>
-                                세로 오차: <b>{hStats.spread ?? 0}mm</b>{" "}
-                                {(hStats.spread ?? 0) >= WARN_PHOTO_REQUIRED_MM
-                                    ? "📸(10mm↑)"
-                                    : (hStats.spread ?? 0) >= WARN_EXTRA_MATERIAL_MM
-                                        ? "⚠️(5mm↑)"
-                                        : ""}
-                            </p>
-                        </label>
-                    </div>
-
-                    {/* 확정값 */}
-                    <div className={styles.summary}>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>확정 가로</span>
-                            <span className={styles.summaryValue}>{confirmedWidth ?? "-"}mm</span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>확정 세로</span>
-                            <span className={styles.summaryValue}>{confirmedHeight ?? "-"}mm</span>
                         </div>
 
-                        {shouldRecommendExtraMaterial && (
-                            <div className={styles.summaryRow} style={{ gridColumn: "1 / -1" }}>
-                                <span className={styles.badge}>오차 안내</span>
-                                <span className={styles.summaryValue}>
-                                    <b>{shouldRequirePhoto ? "10mm 이상" : "5mm 이상"}</b> →{" "}
-                                    {shouldRequirePhoto ? " 사진 첨부 필요" : " 추가자재(마감재) 권장"} / {EXTRA_MATERIAL_COST_TEXT}
-                                </span>
-                            </div>
-                        )}
-                    </div>
+                        {/* 실측자 */}
+                        <div className={styles.sectionTitle}>실측자 정보(자동 기입)</div>
+                        <div className={styles.grid2}>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>실측자 이름</span>
+                                <input className={styles.input} value={measurerName} onChange={(e) => setMeasurerName(e.target.value)} placeholder="예: 임도경" />
+                            </label>
 
-                    {/* 디자인 */}
-                    <div className={styles.sectionTitle}>도어 디자인 선택</div>
-                    <div className={styles.designGrid}>
-                        {DESIGN_OPTIONS.map((d) => (
-                            <button
-                                key={d.id}
-                                type="button"
-                                className={`${styles.designCard} ${designId === d.id ? styles.designCardActive : ""}`}
-                                onClick={() => setDesignId(d.id)}
-                                title={d.name}
-                            >
-                                <div className={styles.designThumbWrap}>
-                                    <img
-                                        className={styles.designThumb}
-                                        src={d.img}
-                                        alt={d.name}
-                                        onError={(e) => {
-                                            if (e.currentTarget.src.endsWith(DESIGN_PLACEHOLDER)) return;
-                                            e.currentTarget.src = DESIGN_PLACEHOLDER;
-                                        }}
-                                    />
-                                </div>
-                                <div className={styles.designName}>{d.name}</div>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* 현장 사진 */}
-                    <div className={styles.sectionTitle}>현장 사진 첨부(일반)</div>
-                    <div className={styles.photoBar}>
-                        <input className={styles.file} type="file" accept="image/*" multiple capture="environment" onChange={(e) => onPickFiles("site", e.target.files)} />
-                        <div className={styles.photoHint}>사진 여러 장 선택 가능 {shouldRequirePhoto ? "✅ 오차 10mm↑이면 최소 1장 필수" : ""}</div>
-                    </div>
-
-                    {sitePhotos.length > 0 && (
-                        <div className={styles.photoGrid}>
-                            {sitePhotos.map((p) => {
-                                const realIdx = previews.findIndex((x) => x.url === p.url);
-                                return (
-                                    <div className={styles.photoItem} key={p.url}>
-                                        <img className={styles.photoImg} src={p.url} alt={`현장사진`} />
-                                        <button type="button" className={styles.photoRemove} onClick={() => removePreview(realIdx)}>
-                                            삭제
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>실측자 연락처</span>
+                                <input className={styles.input} value={measurerPhone} onChange={(e) => setMeasurerPhone(e.target.value)} placeholder="예: 010-0000-0000" />
+                            </label>
                         </div>
-                    )}
 
-                    {/* 비고 */}
-                    <div className={styles.sectionTitle}>특이사항(오차 10mm↑이면 자동 문구 삽입)</div>
-                    <label className={styles.label}>
-                        <textarea className={styles.textarea} value={siteMemo} onChange={(e) => setSiteMemo(e.target.value)} placeholder="예) 추가 자재 필요 / 특이사항" />
-                    </label>
+                        {/* 옵션 */}
+                        <div className={styles.sectionTitle}>옵션</div>
+                        <div className={styles.grid2}>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>시공 위치</span>
+                                <select className={styles.select} value={installLocation} onChange={(e) => setInstallLocation(e.target.value as InstallLocation)}>
+                                    <option value="현관">현관</option>
+                                    <option value="드레스룸">드레스룸</option>
+                                    <option value="알파룸">알파룸</option>
+                                    <option value="거실">거실</option>
+                                </select>
+                            </label>
 
-                    {/* ✅ 일정 + ✅ 결재 방식 */}
-                    <div className={styles.sectionTitle}>일정(입금/시공) + 결재 방식</div>
-                    <div className={styles.grid2}>
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>제품비 입금일(주문일)</span>
-                            <input className={styles.input} type="date" value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
-                            <p className={styles.hint}>※ 시공일 지정 기준이 되는 날짜입니다.</p>
-                        </label>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>수량(조)</span>
+                                <select className={styles.select} value={String(quantity)} onChange={(e) => setQuantity(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}>
+                                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                        <option key={n} value={String(n)}>
+                                            {n}조
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className={styles.hint}>※ 2조 이상 구매도 선택 가능합니다.</p>
+                            </label>
 
-                        <label className={styles.label}>
-                            <span className={styles.labelText}>시공 시간</span>
-                            <select className={styles.select} value={timeSlot} onChange={(e) => setTimeSlot(e.target.value as TimeSlot)}>
-                                <option value="오전">오전</option>
-                                <option value="오후">오후</option>
-                            </select>
-                        </label>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>문 종류</span>
+                                <select className={styles.select} value={category} onChange={(e) => setCategory(e.target.value as DoorCategory)}>
+                                    <option value="자동문">자동문</option>
+                                    <option value="수동문">수동문</option>
+                                    <option value="파티션">파티션</option>
+                                </select>
+                            </label>
 
-                        <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                            <span className={styles.labelText}>시공 요청일</span>
-                            <input
-                                className={styles.input}
-                                type="date"
-                                value={requestedInstallDate}
-                                min={requestedMin}
-                                max={requestedMax}
-                                onChange={(e) => onChangeRequestedInstallDate(e.target.value)}
-                            />
-                            <p className={styles.hint}>
-                                ✅ 달력 선택 가능 (연/월은 <b>{fixedY}년 {fixedM}월</b> 자동 고정, <b>일자만</b> 반영)
-                                <br />
-                                ✅ 규칙: <b>입금일 기준 +10일 이후</b>로 시공일 지정 가능
-                                {!earliestIsThisMonth && (
-                                    <>
-                                        <br />
-                                        ⚠️ <b>입금일+10일이 다음 달</b>로 넘어갈 수 있어, 시공일은 사무실에서 최종 조율될 수 있습니다.
-                                    </>
-                                )}
-                            </p>
-                        </label>
-
-                        <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                            <span className={styles.labelText}>결재 방식</span>
-                            <select className={styles.select} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
-                                <option value="현금결재">현금결재(부가세 미적용)</option>
-                                <option value="현금영수증">현금영수증(부가세 10% 적용)</option>
-                                <option value="세금계산서">세금계산서(부가세 10% 적용)</option>
-                                <option value="카드결재">카드결재(부가세 10% 적용)</option>
-                            </select>
-
-                            {estimate.isSupported ? (
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>상세 유형</span>
+                                <select className={styles.select} value={detail} onChange={(e) => setDetail(e.target.value)}>
+                                    {DOOR_OPTIONS[category].map((opt) => (
+                                        <option key={opt} value={opt}>
+                                            {opt}
+                                        </option>
+                                    ))}
+                                </select>
                                 <p className={styles.hint}>
-                                    {needsVat(paymentMethod) ? (
+                                    ✅ 실측 포인트 자동 제안: <b>가로 {req.wReq}포인트 / 세로 {req.hReq}포인트</b>
+                                    {detail.includes("원슬라이딩") ? (
                                         <>
-                                            ✅ 부가세 10% 적용 안내: 공급가 <b>{formatWon(vatInfo.supplyAmount)}</b> + 부가세{" "}
-                                            <b>{formatWon(vatInfo.vatAmount)}</b> = 결재 합계 <b>{formatWon(vatInfo.totalPayable)}</b>
+                                            <br />
+                                            ✅ 원슬라이딩 확정치: <b>가로=최대 / 세로=최소</b> / 기본자재: <b>각바 2EA</b>
                                         </>
                                     ) : (
                                         <>
-                                            ✅ 부가세 미적용 안내: 결재 합계 <b>{formatWon(vatInfo.totalPayable)}</b>
+                                            <br />
+                                            ✅ 확정치: <b>가로=최소 / 세로=최소</b>
                                         </>
                                     )}
                                 </p>
-                            ) : (
-                                <p className={styles.hint}>※ 자동견적 대상이 아니면 금액은 사무실 확인입니다.</p>
+                            </label>
+
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>유리 종류</span>
+                                <select className={styles.select} value={glass} onChange={(e) => setGlass(e.target.value)}>
+                                    {GLASS_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                            {opt}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>도어 열림 방향</span>
+                                <select className={styles.select} value={openDirection} onChange={(e) => setOpenDirection(e.target.value as OpenDirection)}>
+                                    <option value="좌→우 열림">좌에서 우측 열림 (거실→현관 기준)</option>
+                                    <option value="우→좌 열림">우에서 좌측 열림 (거실→현관 기준)</option>
+                                </select>
+                                <p className={styles.hint}>
+                                    기준: <b>(거실에서 현관을 바로 보며)</b>
+                                </p>
+                            </label>
+
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>현장 할인 종류</span>
+                                <select className={styles.select} value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
+                                    <option value="없음">없음</option>
+                                    <option value="재구매 고객 할인">재구매 고객 할인</option>
+                                    <option value="조건부 현장 할인">조건부 현장 할인</option>
+                                    <option value="추가 자재 조건부 무상">추가 자재 조건부 무상</option>
+                                    <option value="기타">기타</option>
+                                </select>
+                            </label>
+
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>현장 할인 금액(원)</span>
+                                <input
+                                    className={styles.input}
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    value={discountAmountText}
+                                    onChange={(e) => setDiscountAmountText(e.target.value)}
+                                    placeholder="예: 30000"
+                                />
+                                <p className={styles.hint}>※ 실측자가 현장에서 수동으로 입력합니다.</p>
+                            </label>
+                        </div>
+
+                        {detail.includes("원슬라이딩") && (
+                            <>
+                                <div className={styles.sectionTitle}>원슬라이딩 형태</div>
+                                <div className={styles.grid2}>
+                                    <label className={styles.label}>
+                                        <span className={styles.labelText}>형태 선택</span>
+                                        <select className={styles.select} value={slidingMode} onChange={(e) => setSlidingMode(e.target.value as SlidingMode)}>
+                                            <option value="벽부형">벽부형(한쪽 면이 벽면에 닫힘)</option>
+                                            <option value="오픈형">오픈형(좌우 프레임이 벽면에 닫힘)</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Auto-fill from AR */}
+                        <AutoFillFromAR setW={setConfirmedWidth} setH={setConfirmedHeight} />
+
+                        {/* 레이저레벨 사진 */}
+                        <div className={styles.sectionTitle}>실측 전 필수 사진 (레이저 레벨기 측정)</div>
+                        <div className={styles.photoBar}>
+                            <input className={styles.file} type="file" accept="image/*" capture="environment" onChange={(e) => onPickFiles("laser", e.target.files)} />
+                            <div className={styles.photoHint}>✅ 레이저레벨기로 수평/수직 측정하는 장면을 1장 이상 첨부해야 전송 가능합니다.</div>
+                        </div>
+
+                        {laserPhotos.length > 0 && (
+                            <div className={styles.photoGrid}>
+                                {laserPhotos.map((p, idx) => {
+                                    const realIdx = previews.findIndex((x) => x.url === p.url);
+                                    return (
+                                        <div className={styles.photoItem} key={p.url}>
+                                            <img className={styles.photoImg} src={p.url} alt={`레이저레벨-${idx + 1}`} />
+                                            <button type="button" className={styles.photoRemove} onClick={() => removePreview(realIdx)}>
+                                                삭제
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* 실측 */}
+                        <div className={styles.sectionTitle}>실측 (mm) - 포인트 입력</div>
+                        <div className={styles.grid2}>
+                            <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                                <span className={styles.labelText}>가로 포인트 ({req.wReq}개)</span>
+                                <div className={styles.grid2}>
+                                    {widthPoints.map((v, i) => (
+                                        <input
+                                            key={`w-${i}`}
+                                            type="number"
+                                            inputMode="numeric"
+                                            className={styles.input}
+                                            value={v}
+                                            onChange={(e) => setPoint("w", i, e.target.value)}
+                                            placeholder={`가로 ${i + 1}포인트 (예: 1250)`}
+                                        />
+                                    ))}
+                                </div>
+                                <p className={styles.hint}>
+                                    가로 오차: <b>{wStats.spread ?? 0}mm</b>{" "}
+                                    {(wStats.spread ?? 0) >= WARN_PHOTO_REQUIRED_MM
+                                        ? "📸(10mm↑)"
+                                        : (wStats.spread ?? 0) >= WARN_EXTRA_MATERIAL_MM
+                                            ? "⚠️(5mm↑)"
+                                            : ""}
+                                </p>
+                            </label>
+
+                            <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                                <span className={styles.labelText}>세로 포인트 ({req.hReq}개)</span>
+                                <div className={styles.grid2}>
+                                    {heightPoints.map((v, i) => (
+                                        <input
+                                            key={`h-${i}`}
+                                            type="number"
+                                            inputMode="numeric"
+                                            className={styles.input}
+                                            value={v}
+                                            onChange={(e) => setPoint("h", i, e.target.value)}
+                                            placeholder={`세로 ${i + 1}포인트 (예: 2300)`}
+                                        />
+                                    ))}
+                                </div>
+                                <p className={styles.hint}>
+                                    세로 오차: <b>{hStats.spread ?? 0}mm</b>{" "}
+                                    {(hStats.spread ?? 0) >= WARN_PHOTO_REQUIRED_MM
+                                        ? "📸(10mm↑)"
+                                        : (hStats.spread ?? 0) >= WARN_EXTRA_MATERIAL_MM
+                                            ? "⚠️(5mm↑)"
+                                            : ""}
+                                </p>
+                            </label>
+                        </div>
+
+                        {/* 확정값 */}
+                        <div className={styles.summary}>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>확정 가로</span>
+                                <span className={styles.summaryValue}>{confirmedWidth ?? "-"}mm</span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>확정 세로</span>
+                                <span className={styles.summaryValue}>{confirmedHeight ?? "-"}mm</span>
+                            </div>
+
+                            {shouldRecommendExtraMaterial && (
+                                <div className={styles.summaryRow} style={{ gridColumn: "1 / -1" }}>
+                                    <span className={styles.badge}>오차 안내</span>
+                                    <span className={styles.summaryValue}>
+                                        <b>{shouldRequirePhoto ? "10mm 이상" : "5mm 이상"}</b> →{" "}
+                                        {shouldRequirePhoto ? " 사진 첨부 필요" : " 추가자재(마감재) 권장"} / {EXTRA_MATERIAL_COST_TEXT}
+                                    </span>
+                                </div>
                             )}
+                        </div>
+
+                        {/* 디자인 */}
+                        <div className={styles.sectionTitle}>도어 디자인 선택</div>
+                        <div className={styles.designGrid}>
+                            {DESIGN_OPTIONS.map((d) => (
+                                <button
+                                    key={d.id}
+                                    type="button"
+                                    className={`${styles.designCard} ${designId === d.id ? styles.designCardActive : ""}`}
+                                    onClick={() => setDesignId(d.id)}
+                                    title={d.name}
+                                >
+                                    <div className={styles.designThumbWrap}>
+                                        <img
+                                            className={styles.designThumb}
+                                            src={d.img}
+                                            alt={d.name}
+                                            onError={(e) => {
+                                                if (e.currentTarget.src.endsWith(DESIGN_PLACEHOLDER)) return;
+                                                e.currentTarget.src = DESIGN_PLACEHOLDER;
+                                            }}
+                                        />
+                                    </div>
+                                    <div className={styles.designName}>{d.name}</div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 현장 사진 */}
+                        <div className={styles.sectionTitle}>현장 사진 첨부(일반)</div>
+                        <div className={styles.photoBar}>
+                            <input className={styles.file} type="file" accept="image/*" multiple capture="environment" onChange={(e) => onPickFiles("site", e.target.files)} />
+                            <div className={styles.photoHint}>사진 여러 장 선택 가능 {shouldRequirePhoto ? "✅ 오차 10mm↑이면 최소 1장 필수" : ""}</div>
+                        </div>
+
+                        {sitePhotos.length > 0 && (
+                            <div className={styles.photoGrid}>
+                                {sitePhotos.map((p) => {
+                                    const realIdx = previews.findIndex((x) => x.url === p.url);
+                                    return (
+                                        <div className={styles.photoItem} key={p.url}>
+                                            <img className={styles.photoImg} src={p.url} alt={`현장사진`} />
+                                            <button type="button" className={styles.photoRemove} onClick={() => removePreview(realIdx)}>
+                                                삭제
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* 비고 */}
+                        <div className={styles.sectionTitle}>특이사항(오차 10mm↑이면 자동 문구 삽입)</div>
+                        <label className={styles.label}>
+                            <textarea className={styles.textarea} value={siteMemo} onChange={(e) => setSiteMemo(e.target.value)} placeholder="예) 추가 자재 필요 / 특이사항" />
                         </label>
-                    </div>
 
-                    {/* 고객 확인 */}
-                    <div className={styles.sectionTitle}>고객 확인 (전송 전 확인)</div>
-                    <div className={styles.summary}>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>고객</span>
-                            <span className={styles.summaryValue}>
-                                {customerName || "-"} / {customerPhone || "-"}
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>주소</span>
-                            <span className={styles.summaryValue}>{customerAddress || "-"}</span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>일정</span>
-                            <span className={styles.summaryValue}>
-                                입금일 {depositDate} / 시공요청 {requestedInstallDate} ({timeSlot})
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>결재</span>
-                            <span className={styles.summaryValue}>
-                                {paymentMethod} {estimate.isSupported ? ` / 결재 합계 ${formatWon(vatInfo.totalPayable)}` : ""}
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>시공/수량</span>
-                            <span className={styles.summaryValue}>
-                                {installLocation} / {quantity}조
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>옵션</span>
-                            <span className={styles.summaryValue}>
-                                {category} / {detail} / {glass} / {openDirection}
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>디자인</span>
-                            <span className={styles.summaryValue}>{selectedDesign?.name ?? "-"}</span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>확정치</span>
-                            <span className={styles.summaryValue}>
-                                {confirmedWidth ?? "-"} x {confirmedHeight ?? "-"} (mm)
-                            </span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>레이저레벨</span>
-                            <span className={styles.summaryValue}>{laserPhotos.length}장</span>
-                        </div>
-                        <div className={styles.summaryRow}>
-                            <span className={styles.badge}>현장사진</span>
-                            <span className={styles.summaryValue}>{sitePhotos.length}장</span>
-                        </div>
-                    </div>
+                        {/* ✅ 일정 + ✅ 결재 방식 */}
+                        <div className={styles.sectionTitle}>일정(입금/시공) + 결재 방식</div>
+                        <div className={styles.grid2}>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>제품비 입금일(주문일)</span>
+                                <input className={styles.input} type="date" value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
+                                <p className={styles.hint}>※ 시공일 지정 기준이 되는 날짜입니다.</p>
+                            </label>
 
-                    {/* 견적서 */}
-                    <div className={styles.sectionTitle}>견적서 (고객 확인용)</div>
-                    <div className={styles.quoteBox}>
-                        <pre className={styles.quotePre}>{estimateTextForUI}</pre>
-                        <p className={styles.hint}>
-                            ✅ 결재 방식이 <b>현금영수증/세금계산서/카드결재</b>이면 <b>부가세 10%</b>가 자동 포함되어 고객에게 안내됩니다.
-                            <br />
-                            ✅ <b>현금결재</b>는 원래 계산(부가세 미적용)대로 고지됩니다.
-                        </p>
-                    </div>
+                            <label className={styles.label}>
+                                <span className={styles.labelText}>시공 시간</span>
+                                <select className={styles.select} value={timeSlot} onChange={(e) => setTimeSlot(e.target.value as TimeSlot)}>
+                                    <option value="오전">오전</option>
+                                    <option value="오후">오후</option>
+                                </select>
+                            </label>
 
-                    {/* 고객 서명 */}
-                    <div className={styles.sectionTitle}>고객 서명 (전송 필수)</div>
-                    <div className={styles.signatureBox}>
-                        <canvas
-                            ref={signature.canvasRef}
-                            width={500}
-                            height={180}
-                            className={styles.signatureCanvas}
-                            onPointerDown={(e) => signature.start(e)}
-                            onPointerMove={(e) => signature.draw(e)}
-                            onPointerUp={signature.end}
-                            onPointerLeave={signature.end}
-                        />
-                        <div className={styles.signatureActions}>
-                            <button type="button" className={styles.buttonGhost} onClick={signature.clear}>
-                                서명 다시하기
+                            <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                                <span className={styles.labelText}>시공 요청일</span>
+                                <input
+                                    className={styles.input}
+                                    type="date"
+                                    value={requestedInstallDate}
+                                    min={requestedMin}
+                                    max={requestedMax}
+                                    onChange={(e) => onChangeRequestedInstallDate(e.target.value)}
+                                />
+                                <p className={styles.hint}>
+                                    ✅ 달력 선택 가능 (연/월은 <b>{fixedY}년 {fixedM}월</b> 자동 고정, <b>일자만</b> 반영)
+                                    <br />
+                                    ✅ 규칙: <b>입금일 기준 +10일 이후</b>로 시공일 지정 가능
+                                    {!earliestIsThisMonth && (
+                                        <>
+                                            <br />
+                                            ⚠️ <b>입금일+10일이 다음 달</b>로 넘어갈 수 있어, 시공일은 사무실에서 최종 조율될 수 있습니다.
+                                        </>
+                                    )}
+                                </p>
+                            </label>
+
+                            <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                                <span className={styles.labelText}>결재 방식</span>
+                                <select className={styles.select} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
+                                    <option value="현금결재">현금결재(부가세 미적용)</option>
+                                    <option value="현금영수증">현금영수증(부가세 10% 적용)</option>
+                                    <option value="세금계산서">세금계산서(부가세 10% 적용)</option>
+                                    <option value="카드결재">카드결재(부가세 10% 적용)</option>
+                                </select>
+
+                                {estimate.isSupported ? (
+                                    <p className={styles.hint}>
+                                        {needsVat(paymentMethod) ? (
+                                            <>
+                                                ✅ 부가세 10% 적용 안내: 공급가 <b>{formatWon(vatInfo.supplyAmount)}</b> + 부가세{" "}
+                                                <b>{formatWon(vatInfo.vatAmount)}</b> = 결재 합계 <b>{formatWon(vatInfo.totalPayable)}</b>
+                                            </>
+                                        ) : (
+                                            <>
+                                                ✅ 부가세 미적용 안내: 결재 합계 <b>{formatWon(vatInfo.totalPayable)}</b>
+                                            </>
+                                        )}
+                                    </p>
+                                ) : (
+                                    <p className={styles.hint}>※ 자동견적 대상이 아니면 금액은 사무실 확인입니다.</p>
+                                )}
+                            </label>
+                        </div>
+
+                        {/* 고객 확인 */}
+                        <div className={styles.sectionTitle}>고객 확인 (전송 전 확인)</div>
+                        <div className={styles.summary}>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>고객</span>
+                                <span className={styles.summaryValue}>
+                                    {customerName || "-"} / {customerPhone || "-"}
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>주소</span>
+                                <span className={styles.summaryValue}>{customerAddress || "-"}</span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>일정</span>
+                                <span className={styles.summaryValue}>
+                                    입금일 {depositDate} / 시공요청 {requestedInstallDate} ({timeSlot})
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>결재</span>
+                                <span className={styles.summaryValue}>
+                                    {paymentMethod} {estimate.isSupported ? ` / 결재 합계 ${formatWon(vatInfo.totalPayable)}` : ""}
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>시공/수량</span>
+                                <span className={styles.summaryValue}>
+                                    {installLocation} / {quantity}조
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>옵션</span>
+                                <span className={styles.summaryValue}>
+                                    {category} / {detail} / {glass} / {openDirection}
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>디자인</span>
+                                <span className={styles.summaryValue}>{selectedDesign?.name ?? "-"}</span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>확정치</span>
+                                <span className={styles.summaryValue}>
+                                    {confirmedWidth ?? "-"} x {confirmedHeight ?? "-"} (mm)
+                                </span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>레이저레벨</span>
+                                <span className={styles.summaryValue}>{laserPhotos.length}장</span>
+                            </div>
+                            <div className={styles.summaryRow}>
+                                <span className={styles.badge}>현장사진</span>
+                                <span className={styles.summaryValue}>{sitePhotos.length}장</span>
+                            </div>
+                        </div>
+
+                        {/* 견적서 */}
+                        <div className={styles.sectionTitle}>견적서 (고객 확인용)</div>
+                        <div className={styles.quoteBox}>
+                            <pre className={styles.quotePre}>{estimateTextForUI}</pre>
+                            <p className={styles.hint}>
+                                ✅ 결재 방식이 <b>현금영수증/세금계산서/카드결재</b>이면 <b>부가세 10%</b>가 자동 포함되어 고객에게 안내됩니다.
+                                <br />
+                                ✅ <b>현금결재</b>는 원래 계산(부가세 미적용)대로 고지됩니다.
+                            </p>
+                        </div>
+
+                        {/* 고객 서명 */}
+                        <div className={styles.sectionTitle}>고객 서명 (전송 필수)</div>
+                        <div className={styles.signatureBox}>
+                            <canvas
+                                ref={signature.canvasRef}
+                                width={500}
+                                height={180}
+                                className={styles.signatureCanvas}
+                                onPointerDown={(e) => signature.start(e)}
+                                onPointerMove={(e) => signature.draw(e)}
+                                onPointerUp={signature.end}
+                                onPointerLeave={signature.end}
+                            />
+                            <div className={styles.signatureActions}>
+                                <button type="button" className={styles.buttonGhost} onClick={signature.clear}>
+                                    서명 다시하기
+                                </button>
+                            </div>
+                            <p className={styles.hint}>※ 고객 서명이 없으면 전송이 불가합니다.</p>
+                        </div>
+
+                        {/* 액션 */}
+                        <div className={styles.actions}>
+                            <button className={styles.button} type="button" onClick={() => void send("office")}>
+                                사무실로 전송(공유/SMS/이메일)
+                            </button>
+
+                            <button className={styles.buttonGhost} type="button" onClick={() => void send("customer")}>
+                                고객용 전송(문자 작성)
+                            </button>
+
+                            <button className={styles.buttonStrong} type="submit">
+                                사무실 + 고객 동시 전송
+                            </button>
+
+                            <button
+                                type="button"
+                                className={styles.buttonGhost}
+                                onClick={() => {
+                                    const msg =
+                                        `실측 오차 안내입니다. ` +
+                                        `가로 오차 ${wStats.spread ?? 0}밀리미터, ` +
+                                        `세로 오차 ${hStats.spread ?? 0}밀리미터 입니다. ` +
+                                        (shouldRequirePhoto
+                                            ? `오차가 ${WARN_PHOTO_REQUIRED_MM}밀리미터 이상이므로 사진 첨부가 필요합니다.`
+                                            : shouldRecommendExtraMaterial
+                                                ? `오차가 ${WARN_EXTRA_MATERIAL_MM}밀리미터 이상이므로 추가자재 사용을 권장합니다. ${EXTRA_MATERIAL_COST_TEXT}`
+                                                : "");
+                                    speech.speak(msg);
+                                }}
+                                title="오차/권장사항 음성 안내"
+                            >
+                                🔊 오차 안내 음성 다시 듣기
+                            </button>
+
+                            <button
+                                type="button"
+                                className={styles.buttonGhost}
+                                onClick={() => void analyzeWithAI()}
+                                disabled={isAiLoading}
+                                style={{ position: "relative" }}
+                            >
+                                {isAiLoading ? "🤖 AI 분석 중..." : "🤖 AI 시공 리스크 분석 (앱 내 실행)"}
                             </button>
                         </div>
-                        <p className={styles.hint}>※ 고객 서명이 없으면 전송이 불가합니다.</p>
-                    </div>
+                    </form>
+                </section>
 
-                    {/* 액션 */}
-                    <div className={styles.actions}>
-                        <button className={styles.button} type="button" onClick={() => void send("office")}>
-                            사무실로 전송(공유/SMS/이메일)
-                        </button>
-
-                        <button className={styles.buttonGhost} type="button" onClick={() => void send("customer")}>
-                            고객용 전송(문자 작성)
-                        </button>
-
-                        <button className={styles.buttonStrong} type="submit">
-                            사무실 + 고객 동시 전송
-                        </button>
-
-                        <button
-                            type="button"
-                            className={styles.buttonGhost}
-                            onClick={() => {
-                                const msg =
-                                    `실측 오차 안내입니다. ` +
-                                    `가로 오차 ${wStats.spread ?? 0}밀리미터, ` +
-                                    `세로 오차 ${hStats.spread ?? 0}밀리미터 입니다. ` +
-                                    (shouldRequirePhoto
-                                        ? `오차가 ${WARN_PHOTO_REQUIRED_MM}밀리미터 이상이므로 사진 첨부가 필요합니다.`
-                                        : shouldRecommendExtraMaterial
-                                            ? `오차가 ${WARN_EXTRA_MATERIAL_MM}밀리미터 이상이므로 추가자재 사용을 권장합니다. ${EXTRA_MATERIAL_COST_TEXT}`
-                                            : "");
-                                speech.speak(msg);
-                            }}
-                            title="오차/권장사항 음성 안내"
-                        >
-                            🔊 오차 안내 음성 다시 듣기
-                        </button>
-
-                        <button
-                            type="button"
-                            className={styles.buttonGhost}
-                            onClick={() => void analyzeWithAI()}
-                            disabled={isAiLoading}
-                            style={{ position: "relative" }}
-                        >
-                            {isAiLoading ? "🤖 AI 분석 중..." : "🤖 AI 시공 리스크 분석 (앱 내 실행)"}
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            {/* AI 분석 결과 모달 (간단 구현) */}
-            {aiResult && (
-                <div
-                    style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "rgba(0,0,0,0.8)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 16,
-                        zIndex: 9999,
-                    }}
-                >
+                {/* AI 분석 결과 모달 (간단 구현) */}
+                {aiResult && (
                     <div
                         style={{
-                            background: "#111827",
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            borderRadius: 16,
-                            width: "min(600px, 100%)",
-                            maxHeight: "80vh",
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: "rgba(0,0,0,0.8)",
                             display: "flex",
-                            flexDirection: "column",
-                            overflow: "hidden",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: 16,
+                            zIndex: 9999,
                         }}
                     >
-                        <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#fff" }}>🤖 AI 시공 리스크 분석 결과</h2>
-                            <button
-                                onClick={() => setAiResult("")}
-                                style={{ background: "transparent", border: "none", color: "#fff", fontSize: 24, cursor: "pointer" }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-                        <div style={{ padding: 16, overflowY: "auto", flex: 1, color: "#e5e7eb", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                            {aiResult}
-                        </div>
-                        <div style={{ padding: 16, borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "flex-end" }}>
-                            <button
-                                onClick={() => {
-                                    setAiResult("");
-                                    // 필요하면 메모에 추가하는 기능 등 확장 가능
-                                }}
-                                style={{
-                                    background: "#374151",
-                                    color: "#fff",
-                                    border: "none",
-                                    padding: "10px 16px",
-                                    borderRadius: 8,
-                                    cursor: "pointer",
-                                    fontWeight: 700
-                                }}
-                            >
-                                닫기
-                            </button>
+                        <div
+                            style={{
+                                background: "#111827",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                borderRadius: 16,
+                                width: "min(600px, 100%)",
+                                maxHeight: "80vh",
+                                display: "flex",
+                                flexDirection: "column",
+                                overflow: "hidden",
+                            }}
+                        >
+                            <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#fff" }}>🤖 AI 시공 리스크 분석 결과</h2>
+                                <button
+                                    onClick={() => setAiResult("")}
+                                    style={{ background: "transparent", border: "none", color: "#fff", fontSize: 24, cursor: "pointer" }}
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div style={{ padding: 16, overflowY: "auto", flex: 1, color: "#e5e7eb", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                                {aiResult}
+                            </div>
+                            <div style={{ padding: 16, borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "flex-end" }}>
+                                <button
+                                    onClick={() => {
+                                        setAiResult("");
+                                        // 필요하면 메모에 추가하는 기능 등 확장 가능
+                                    }}
+                                    style={{
+                                        background: "#374151",
+                                        color: "#fff",
+                                        border: "none",
+                                        padding: "10px 16px",
+                                        borderRadius: 8,
+                                        cursor: "pointer",
+                                        fontWeight: 700
+                                    }}
+                                >
+                                    닫기
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </main>
+                )}
+            </main>
+        </>
     );
 }
