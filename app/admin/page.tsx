@@ -5,14 +5,20 @@ import { useRouter } from "next/navigation";
 
 const STORAGE_KEY = "limsdoor_admin_settings_v1";
 
+export type ReferenceObject = {
+    id: string;
+    name: string;
+    sizeMm: number;
+};
+
 type AdminSettings = {
     officePhone: string;
     officeEmail: string;
     measurerName: string;
     measurerPhone: string;
     openaiApiKey?: string;
-    referenceObjectName?: string;
-    referenceObjectSize?: string;
+    // v2: List of objects
+    referenceObjects?: ReferenceObject[];
 };
 
 function safeParse(raw: string | null): Partial<AdminSettings> {
@@ -25,8 +31,7 @@ function safeParse(raw: string | null): Partial<AdminSettings> {
             measurerName: String(obj.measurerName ?? ""),
             measurerPhone: String(obj.measurerPhone ?? ""),
             openaiApiKey: String(obj.openaiApiKey ?? ""),
-            referenceObjectName: String(obj.referenceObjectName ?? ""),
-            referenceObjectSize: String(obj.referenceObjectSize ?? ""),
+            referenceObjects: Array.isArray(obj.referenceObjects) ? obj.referenceObjects : [],
         };
     } catch {
         return {};
@@ -41,247 +46,189 @@ export default function AdminPage() {
     const [measurerName, setMeasurerName] = useState("");
     const [measurerPhone, setMeasurerPhone] = useState("");
     const [openaiApiKey, setOpenaiApiKey] = useState("");
-    const [referenceObjectName, setReferenceObjectName] = useState("");
-    const [referenceObjectSize, setReferenceObjectSize] = useState("");
+
+    // v2 Reference Objects
+    const [refObjects, setRefObjects] = useState<ReferenceObject[]>([]);
+
+    // Inputs for adding new object
+    const [newRefName, setNewRefName] = useState("");
+    const [newRefSize, setNewRefSize] = useState("");
 
     // 최초 로드: 기존 저장값 불러오기
     useEffect(() => {
-        const parsed = safeParse(localStorage.getItem(STORAGE_KEY));
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = safeParse(raw);
         setOfficePhone(parsed.officePhone ?? "");
         setOfficeEmail(parsed.officeEmail ?? "");
         setMeasurerName(parsed.measurerName ?? "");
         setMeasurerPhone(parsed.measurerPhone ?? "");
         setOpenaiApiKey(parsed.openaiApiKey ?? "");
-        setReferenceObjectName(parsed.referenceObjectName ?? "");
-        setReferenceObjectSize(parsed.referenceObjectSize ?? "");
+
+        // Migration: If old single object exists but no list, add it to list
+        if (raw) {
+            try {
+                const old = JSON.parse(raw);
+                if (old.referenceObjectName && old.referenceObjectSize && (!parsed.referenceObjects || parsed.referenceObjects.length === 0)) {
+                    const migrated: ReferenceObject = {
+                        id: Date.now().toString(),
+                        name: old.referenceObjectName,
+                        sizeMm: Number(old.referenceObjectSize)
+                    };
+                    setRefObjects([migrated]);
+                    return;
+                }
+            } catch { }
+        }
+
+        setRefObjects(parsed.referenceObjects ?? []);
     }, []);
 
-    const canSave = useMemo(() => {
-        // 완전 강제는 아니고, 빈 값이어도 저장은 되게 할 수 있음.
-        // 여기서는 최소한 실측자 이름/연락처 중 하나라도 있으면 저장 가능 정도로만 체크.
-        return true;
-    }, []);
+    const onAddRefObject = () => {
+        if (!newRefName.trim() || !newRefSize.trim()) {
+            alert("이름과 길이를 모두 입력해주세요.");
+            return;
+        }
+        const size = Number(newRefSize);
+        if (isNaN(size) || size <= 0) {
+            alert("길이는 0보다 큰 숫자여야 합니다.");
+            return;
+        }
+
+        const newObj: ReferenceObject = {
+            id: Date.now().toString(),
+            name: newRefName.trim(),
+            sizeMm: size,
+        };
+
+        setRefObjects([...refObjects, newObj]);
+        setNewRefName("");
+        setNewRefSize("");
+    };
+
+    const onDeleteRefObject = (id: string) => {
+        if (!confirm("삭제하시겠습니까?")) return;
+        setRefObjects(refObjects.filter(o => o.id !== id));
+    };
 
     const onSave = () => {
-        if (!canSave) return;
-
         const payload: AdminSettings = {
             officePhone: officePhone.trim(),
             officeEmail: officeEmail.trim(),
             measurerName: measurerName.trim(),
             measurerPhone: measurerPhone.trim(),
             openaiApiKey: openaiApiKey.trim(),
-            referenceObjectName: referenceObjectName.trim(),
-            referenceObjectSize: referenceObjectSize.trim(),
+            referenceObjects: refObjects,
         };
 
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-            alert("저장되었습니다. 실측 화면으로 이동합니다.");
-            router.push("/field/new"); // ✅ 저장 후 자동 이동
+            alert("저장되었습니다.");
+            router.push("/field/new");
         } catch {
-            alert("저장에 실패했습니다. 브라우저 저장소(localStorage)를 확인해주세요.");
+            alert("저장에 실패했습니다. 로컬스토리지 확인 필요.");
         }
     };
 
     const onReset = () => {
-        const ok = confirm("저장된 관리자 설정을 초기화할까요?");
-        if (!ok) return;
-
-        try {
-            localStorage.removeItem(STORAGE_KEY);
-        } catch {
-            // ignore
-        }
-
+        if (!confirm("모든 설정을 초기화할까요?")) return;
+        localStorage.removeItem(STORAGE_KEY);
         setOfficePhone("");
         setOfficeEmail("");
         setMeasurerName("");
         setMeasurerPhone("");
         setOpenaiApiKey("");
-        setReferenceObjectName("");
-        setReferenceObjectSize("");
+        setRefObjects([]);
         alert("초기화되었습니다.");
     };
 
     return (
-        <main
-            style={{
-                minHeight: "100vh",
-                padding: 24,
-                background: "#0b0c10",
-                color: "#fff",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "flex-start",
-            }}
-        >
-            <section
-                style={{
-                    width: "min(920px, 100%)",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    borderRadius: 18,
-                    padding: 24,
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-                }}
-            >
-                <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 8 }}>
-                    관리자 설정
-                </h1>
-                <p style={{ opacity: 0.8, marginBottom: 18 }}>
-                    사무실 수신처, 실측자 정보, AI API 키를 저장합니다. (로컬스토리지:{" "}
-                    <b>{STORAGE_KEY}</b>)
+        <main style={{ minHeight: "100vh", padding: 24, background: "#0b0c10", color: "#fff", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+            <section style={{ width: "min(920px, 100%)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 18, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.35)" }}>
+                <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 8 }}>관리자 설정 (v2)</h1>
+                <p style={{ opacity: 0.8, marginBottom: 24 }}>
+                    사무실 정보, 실측자, AI 키, 그리고 <b>AR 기준 물체</b>를 관리합니다.
                 </p>
 
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 16,
-                    }}
-                >
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>사무실 전화번호</span>
-                        <input
-                            value={officePhone}
-                            onChange={(e) => setOfficePhone(e.target.value)}
-                            placeholder="예: 010-1234-5678"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            발송 문자(SMS) 사무실 대상 번호로 사용할 수 있습니다.
-                        </small>
+                {/* Basic Settings */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 30 }}>
+                    <label style={labelStyle}>
+                        <span>사무실 전화번호</span>
+                        <input value={officePhone} onChange={e => setOfficePhone(e.target.value)} style={inputStyle} placeholder="010-1234-5678" />
                     </label>
-
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>사무실 이메일</span>
-                        <input
-                            value={officeEmail}
-                            onChange={(e) => setOfficeEmail(e.target.value)}
-                            placeholder="예: office@lims.co.kr"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            사무실에서 메일을 수신할 주소로 사용합니다.
-                        </small>
+                    <label style={labelStyle}>
+                        <span>사무실 이메일</span>
+                        <input value={officeEmail} onChange={e => setOfficeEmail(e.target.value)} style={inputStyle} placeholder="office@lims.co.kr" />
                     </label>
-
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>기본 실측자 이름</span>
-                        <input
-                            value={measurerName}
-                            onChange={(e) => setMeasurerName(e.target.value)}
-                            placeholder="예: 임도경"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            <b>/field/new</b>에서 자동으로 채워집니다. (수정 가능)
-                        </small>
+                    <label style={labelStyle}>
+                        <span>실측자 이름</span>
+                        <input value={measurerName} onChange={e => setMeasurerName(e.target.value)} style={inputStyle} placeholder="임도경" />
                     </label>
-
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>기본 실측자 연락처</span>
-                        <input
-                            value={measurerPhone}
-                            onChange={(e) => setMeasurerPhone(e.target.value)}
-                            placeholder="예: 010-0000-0000"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            <b>/field/new</b>에서 자동으로 채워집니다. (수정 가능)
-                        </small>
+                    <label style={labelStyle}>
+                        <span>실측자 연락처</span>
+                        <input value={measurerPhone} onChange={e => setMeasurerPhone(e.target.value)} style={inputStyle} placeholder="010-0000-0000" />
                     </label>
-
-                    <label style={{ display: "grid", gap: 8, gridColumn: "1 / -1" }}>
-                        <span style={{ fontWeight: 800 }}>OpenAI API Key (선택)</span>
-                        <input
-                            type="password"
-                            value={openaiApiKey}
-                            onChange={(e) => setOpenaiApiKey(e.target.value)}
-                            placeholder="sk-..."
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            AI 분석 기능 사용 시 필요합니다. (브라우저에만 저장됨)
-                        </small>
-                    </label>
-
-                    {/* Reference Object Settings */}
-                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid rgba(255,255,255,0.1)", margin: "10px 0" }} />
-
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>AR 기준 물체 이름</span>
-                        <input
-                            value={referenceObjectName}
-                            onChange={(e) => setReferenceObjectName(e.target.value)}
-                            placeholder="예: 아이폰15, 500ml 생수병"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            AR 정밀 보정을 위한 기준 물건 이름
-                        </small>
-                    </label>
-
-                    <label style={{ display: "grid", gap: 8 }}>
-                        <span style={{ fontWeight: 800 }}>기준 물체 길이(mm)</span>
-                        <input
-                            type="number"
-                            value={referenceObjectSize}
-                            onChange={(e) => setReferenceObjectSize(e.target.value)}
-                            placeholder="예: 147"
-                            style={inputStyle}
-                        />
-                        <small style={{ opacity: 0.75 }}>
-                            해당 물건의 실제 길이 (mm 단위, 보정용)
-                        </small>
+                    <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+                        <span>OpenAI API Key (선택)</span>
+                        <input type="password" value={openaiApiKey} onChange={e => setOpenaiApiKey(e.target.value)} style={inputStyle} placeholder="sk-..." />
                     </label>
                 </div>
 
-                <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-                    <button onClick={onSave} style={btnPrimary}>
-                        저장
-                    </button>
-                    <button onClick={onReset} style={btnGhost}>
-                        초기화
-                    </button>
-                    <button onClick={() => router.push("/field/new")} style={btnGhost}>
-                        실측 화면으로 이동
-                    </button>
+                {/* Reference Objects List */}
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 24 }}>
+                    <h2 style={{ fontSize: 18, marginBottom: 12 }}>📏 AR 기준 물체 목록</h2>
+                    <p style={{ fontSize: 13, color: "#aaa", marginBottom: 16 }}>
+                        AR 실측 시 오차를 줄이기 위해 사용할 기준 물건들을 등록해주세요.<br />
+                        예: 아이폰15(147mm), A4용지(297mm), 신용카드(85mm) 등
+                    </p>
+
+                    {/* List */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                        {refObjects.length === 0 && (
+                            <div style={{ padding: 12, background: "rgba(255,255,255,0.05)", borderRadius: 8, color: "#888", textAlign: "center" }}>
+                                등록된 기준 물체가 없습니다. 아래에서 추가해주세요.
+                            </div>
+                        )}
+                        {refObjects.map((obj) => (
+                            <div key={obj.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1f222e", padding: "12px 16px", borderRadius: 10, border: "1px solid #333" }}>
+                                <div>
+                                    <span style={{ fontWeight: "bold", fontSize: 16, marginRight: 8 }}>{obj.name}</span>
+                                    <span style={{ color: "#4ade80", fontSize: 14 }}>{obj.sizeMm}mm</span>
+                                </div>
+                                <button onClick={() => onDeleteRefObject(obj.id)} style={{ background: "#ff4444", border: "none", color: "#fff", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                                    삭제
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Add New */}
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", background: "rgba(255,255,255,0.03)", padding: 16, borderRadius: 12 }}>
+                        <label style={{ flex: 2, display: "flex", flexDirection: "column", gap: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: "bold" }}>물건 이름</span>
+                            <input value={newRefName} onChange={e => setNewRefName(e.target.value)} style={inputStyleSmall} placeholder="예: 갤럭시S24" />
+                        </label>
+                        <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: "bold" }}>길이(mm)</span>
+                            <input type="number" value={newRefSize} onChange={e => setNewRefSize(e.target.value)} style={inputStyleSmall} placeholder="147" />
+                        </label>
+                        <button onClick={onAddRefObject} style={{ height: 38, padding: "0 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>
+                            추가
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 30 }}>
+                    <button onClick={onSave} style={btnPrimary}>설정 저장</button>
+                    <button onClick={onReset} style={btnGhost}>초기화</button>
+                    <button onClick={() => router.push("/field/new")} style={btnGhost}>돌아가기</button>
                 </div>
             </section>
         </main>
     );
 }
 
-const inputStyle: React.CSSProperties = {
-    height: 42,
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "#0f1117",
-    color: "#fff",
-    padding: "0 12px",
-    outline: "none",
-};
-
-const btnPrimary: React.CSSProperties = {
-    height: 42,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "#2b5cff",
-    color: "#fff",
-    fontWeight: 900,
-    cursor: "pointer",
-};
-
-const btnGhost: React.CSSProperties = {
-    height: 42,
-    padding: "0 16px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "transparent",
-    color: "#fff",
-    fontWeight: 900,
-    cursor: "pointer",
-};
+const labelStyle: React.CSSProperties = { display: "grid", gap: 8 };
+const inputStyle: React.CSSProperties = { height: 42, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "#0f1117", color: "#fff", padding: "0 12px", outline: "none" };
+const inputStyleSmall: React.CSSProperties = { ...inputStyle, height: 38, fontSize: 14 };
+const btnPrimary: React.CSSProperties = { height: 42, padding: "0 24px", borderRadius: 10, border: "none", background: "#2b5cff", color: "#fff", fontWeight: 900, cursor: "pointer" };
+const btnGhost: React.CSSProperties = { ...btnPrimary, background: "transparent", border: "1px solid rgba(255,255,255,0.14)" };
