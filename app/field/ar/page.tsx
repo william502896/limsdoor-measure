@@ -23,7 +23,7 @@ export default function ArPage() {
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-    const reticleRef = useRef<THREE.Mesh | null>(null);
+    const reticleRef = useRef<THREE.Group | null>(null);
     const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
     const hitTestSourceRequestedRef = useRef(false);
 
@@ -75,14 +75,35 @@ export default function ArPage() {
         light.position.set(0.5, 1, 0.25);
         scene.add(light);
 
-        // Reticle (조준점)
-        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-        const reticleMaterial = new THREE.MeshBasicMaterial();
-        const reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
-        reticleRef.current = reticle;
+        // ============================================
+        // ✅ Improved Reticle (High Visibility)
+        // ============================================
+        const reticleGroup = new THREE.Group();
+        reticleGroup.matrixAutoUpdate = false;
+        reticleGroup.visible = false;
+        scene.add(reticleGroup);
+        reticleRef.current = reticleGroup;
+
+        // 1. Precise Outer Ring (Cyan)
+        const ringGeo = new THREE.RingGeometry(0.04, 0.05, 32).rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        reticleGroup.add(ring);
+
+        // 2. Crosshair Lines (White, Thin)
+        const lineGeo = new THREE.PlaneGeometry(0.3, 0.003).rotateX(-Math.PI / 2);
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const line1 = new THREE.Mesh(lineGeo, lineMat); // Horizontal
+        const line2 = new THREE.Mesh(lineGeo, lineMat); // Vertical
+        line2.rotation.y = Math.PI / 2;
+        reticleGroup.add(line1);
+        reticleGroup.add(line2);
+
+        // 3. Center Dot (Red)
+        const dotGeo = new THREE.CircleGeometry(0.008, 32).rotateX(-Math.PI / 2);
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const dot = new THREE.Mesh(dotGeo, dotMat);
+        reticleGroup.add(dot);
 
         // Controller (Tap Event)
         const controller = renderer.xr.getController(0);
@@ -90,10 +111,10 @@ export default function ArPage() {
         scene.add(controller);
 
         function onSelect() {
-            if (!reticle.visible) return;
+            if (!reticleGroup.visible) return;
 
             const position = new THREE.Vector3();
-            position.setFromMatrixPosition(reticle.matrix);
+            position.setFromMatrixPosition(reticleGroup.matrix);
 
             addPoint(position);
         }
@@ -111,11 +132,11 @@ export default function ArPage() {
                         });
                     });
 
-                    // Session End Handler
                     session.addEventListener("end", () => {
                         hitTestSourceRequestedRef.current = false;
                         hitTestSourceRef.current = null;
                         setStatus("AR 세션이 종료되었습니다.");
+                        setIsArRunning(false);
                     });
 
                     hitTestSourceRequestedRef.current = true;
@@ -128,13 +149,12 @@ export default function ArPage() {
                         const pose = hit.getPose(referenceSpace);
 
                         if (pose) {
-                            reticle.visible = true;
-                            reticle.matrix.fromArray(pose.transform.matrix);
-                            // Avoid updating status every frame to prevent React render thrashing
-                            // but here we just set it once when finding plane usually
+                            reticleGroup.visible = true;
+                            reticleGroup.matrix.fromArray(pose.transform.matrix);
+                            // Avoid setting status every frame if possible
                         }
                     } else {
-                        reticle.visible = false;
+                        reticleGroup.visible = false;
                     }
                 }
             }
@@ -153,7 +173,6 @@ export default function ArPage() {
             if (rendererRef.current) {
                 rendererRef.current.setAnimationLoop(null);
             }
-            // Cleanup DOM
             if (containerRef.current && rendererRef.current) {
                 // containerRef.current.removeChild(rendererRef.current.domElement);
             }
@@ -164,13 +183,12 @@ export default function ArPage() {
     const addPoint = (pos: THREE.Vector3) => {
         if (!sceneRef.current) return;
 
-        // Check if we already have 2 points (full line) -> reset
         if (pointsRef.current.length >= 2) {
             clearMeasurements();
         }
 
         // Add Marker
-        const geometry = new THREE.SphereGeometry(0.05, 32, 32);
+        const geometry = new THREE.SphereGeometry(0.03, 32, 32); // Smaller marker
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(pos);
@@ -180,23 +198,21 @@ export default function ArPage() {
         const newPoints = [...points, { x: pos.x, y: pos.y, z: pos.z }];
         setPoints(newPoints);
 
-        // Calculate if 2 points
         if (pointsRef.current.length === 2) {
             const p1 = pointsRef.current[0].position;
             const p2 = pointsRef.current[1].position;
-            const distM = p1.distanceTo(p2); // meters
-            const distMm = Math.round(distM * 1000); // millimeters
+            const distM = p1.distanceTo(p2);
+            const distMm = Math.round(distM * 1000);
             setDistance(distMm);
             setStatus(`측정 완료: ${distMm}mm`);
 
-            // Draw Line
             const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 5 });
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 4 });
             const line = new THREE.Line(lineGeo, lineMat);
             sceneRef.current.add(line);
             lineRef.current = line;
         } else {
-            setStatus("첫 번째 점이 찍혔습니다. 두 번째 점을 찍어주세요.");
+            setStatus("첫 번째 점 완료. 개구부 반대쪽 안쪽을 찍어주세요.");
         }
     };
 
@@ -240,14 +256,8 @@ export default function ArPage() {
             rendererRef.current.xr.setReferenceSpaceType("local");
             rendererRef.current.xr.setSession(session);
 
-            setStatus("바닥이나 벽을 천천히 비춰주세요...");
+            setStatus("개구부 안쪽 모서리를 천천히 비춰주세요...");
             setIsArRunning(true);
-
-            session.addEventListener("end", () => {
-                setStatus("AR 세션이 종료되었습니다.");
-                setIsArRunning(false);
-                // window.location.reload(); // Simple reset
-            });
 
         } catch (e) {
             console.error(e);
@@ -270,7 +280,9 @@ export default function ArPage() {
                 zIndex: 10
             }}>
                 <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>📏 AR 실측 (BETA)</h1>
-                <p style={{ margin: "5px 0", fontSize: 14, opacity: 0.9 }}>{status}</p>
+                <p style={{ margin: "5px 0", fontSize: 16, fontWeight: "bold", background: "rgba(0,0,0,0.5)", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
+                    {status}
+                </p>
 
                 {isSupported === false && (
                     <div style={{ background: "rgba(255,50,50,0.8)", padding: 10, borderRadius: 8, marginTop: 10, fontSize: 12 }}>
@@ -286,8 +298,26 @@ export default function ArPage() {
                 )}
             </div>
 
-            {/* Custom Start Button (replaces WebXR default button) */}
-            {isSupported !== false && status.includes("시작 버튼") && (
+            {/* Static Crosshair Overlay (Only when AR is running) */}
+            {isArRunning && (
+                <div style={{
+                    position: "absolute",
+                    top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    pointerEvents: "none",
+                    zIndex: 15,
+                    opacity: 0.7
+                }}>
+                    <div style={{ width: 40, height: 2, background: "#fff", position: "absolute", top: 0, left: -20, boxShadow: "0 0 2px #000" }}></div>
+                    <div style={{ width: 2, height: 40, background: "#fff", position: "absolute", top: -20, left: 0, boxShadow: "0 0 2px #000" }}></div>
+                    <div style={{ position: "absolute", top: 30, left: -100, width: 200, textAlign: "center", color: "yellow", fontSize: 13, textShadow: "0 1px 2px #000" }}>
+                        ▲ 개구부 안쪽 모서리 일치 ▲
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Start Button */}
+            {isSupported !== false && !isArRunning && (
                 <div style={{
                     position: "absolute",
                     top: "50%", left: "50%",
@@ -314,7 +344,7 @@ export default function ArPage() {
                         AR 카메라 시작
                     </button>
                     <p style={{ color: "#aaa", marginTop: 16, fontSize: 14 }}>
-                        버튼을 누르고 카메라 권한을 허용해주세요.
+                        개구부 <b>안쪽 사이즈</b>를 측정합니다.
                     </p>
                 </div>
             )}
