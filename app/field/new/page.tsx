@@ -1430,6 +1430,9 @@ ${payload}`;
                         </>
                     )}
 
+                    {/* Auto-fill from AR */}
+                    <AutoFillFromAR setW={setConfirmedWidth} setH={setConfirmedHeight} />
+
                     {/* 레이저레벨 사진 */}
                     <div className={styles.sectionTitle}>실측 전 필수 사진 (레이저 레벨기 측정)</div>
                     <div className={styles.photoBar}>
