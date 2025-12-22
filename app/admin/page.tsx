@@ -11,6 +11,8 @@ type AdminSettings = {
     measurerName: string;
     measurerPhone: string;
     openaiApiKey?: string;
+    referenceObjectName?: string;
+    referenceObjectSize?: string;
 };
 
 function safeParse(raw: string | null): Partial<AdminSettings> {
@@ -23,6 +25,8 @@ function safeParse(raw: string | null): Partial<AdminSettings> {
             measurerName: String(obj.measurerName ?? ""),
             measurerPhone: String(obj.measurerPhone ?? ""),
             openaiApiKey: String(obj.openaiApiKey ?? ""),
+            referenceObjectName: String(obj.referenceObjectName ?? ""),
+            referenceObjectSize: String(obj.referenceObjectSize ?? ""),
         };
     } catch {
         return {};
@@ -37,6 +41,8 @@ export default function AdminPage() {
     const [measurerName, setMeasurerName] = useState("");
     const [measurerPhone, setMeasurerPhone] = useState("");
     const [openaiApiKey, setOpenaiApiKey] = useState("");
+    const [referenceObjectName, setReferenceObjectName] = useState("");
+    const [referenceObjectSize, setReferenceObjectSize] = useState("");
 
     // 최초 로드: 기존 저장값 불러오기
     useEffect(() => {
@@ -46,6 +52,8 @@ export default function AdminPage() {
         setMeasurerName(parsed.measurerName ?? "");
         setMeasurerPhone(parsed.measurerPhone ?? "");
         setOpenaiApiKey(parsed.openaiApiKey ?? "");
+        setReferenceObjectName(parsed.referenceObjectName ?? "");
+        setReferenceObjectSize(parsed.referenceObjectSize ?? "");
     }, []);
 
     const canSave = useMemo(() => {
@@ -63,6 +71,8 @@ export default function AdminPage() {
             measurerName: measurerName.trim(),
             measurerPhone: measurerPhone.trim(),
             openaiApiKey: openaiApiKey.trim(),
+            referenceObjectName: referenceObjectName.trim(),
+            referenceObjectSize: referenceObjectSize.trim(),
         };
 
         try {
@@ -89,6 +99,8 @@ export default function AdminPage() {
         setMeasurerName("");
         setMeasurerPhone("");
         setOpenaiApiKey("");
+        setReferenceObjectName("");
+        setReferenceObjectSize("");
         alert("초기화되었습니다.");
     };
 
@@ -192,6 +204,36 @@ export default function AdminPage() {
                         />
                         <small style={{ opacity: 0.75 }}>
                             AI 분석 기능 사용 시 필요합니다. (브라우저에만 저장됨)
+                        </small>
+                    </label>
+
+                    {/* Reference Object Settings */}
+                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid rgba(255,255,255,0.1)", margin: "10px 0" }} />
+
+                    <label style={{ display: "grid", gap: 8 }}>
+                        <span style={{ fontWeight: 800 }}>AR 기준 물체 이름</span>
+                        <input
+                            value={referenceObjectName}
+                            onChange={(e) => setReferenceObjectName(e.target.value)}
+                            placeholder="예: 아이폰15, 500ml 생수병"
+                            style={inputStyle}
+                        />
+                        <small style={{ opacity: 0.75 }}>
+                            AR 정밀 보정을 위한 기준 물건 이름
+                        </small>
+                    </label>
+
+                    <label style={{ display: "grid", gap: 8 }}>
+                        <span style={{ fontWeight: 800 }}>기준 물체 길이(mm)</span>
+                        <input
+                            type="number"
+                            value={referenceObjectSize}
+                            onChange={(e) => setReferenceObjectSize(e.target.value)}
+                            placeholder="예: 147"
+                            style={inputStyle}
+                        />
+                        <small style={{ opacity: 0.75 }}>
+                            해당 물건의 실제 길이 (mm 단위, 보정용)
                         </small>
                     </label>
                 </div>

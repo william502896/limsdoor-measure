@@ -1205,9 +1205,20 @@ ${payload}`;
                             🔊 음성 안내
                         </label>
 
-                        <a className={styles.buttonGhost} href="/field/ar" style={{ borderColor: "#3b82f6", color: "#3b82f6" }}>
+                        <button
+                            type="button"
+                            className={styles.buttonGhost}
+                            style={{ borderColor: "#3b82f6", color: "#3b82f6", cursor: "pointer" }}
+                            onClick={() => {
+                                // Pass current door type options to AR page
+                                const params = new URLSearchParams();
+                                if (category) params.set("category", category);
+                                if (type) params.set("doorType", type);
+                                window.location.href = `/field/ar?${params.toString()}`;
+                            }}
+                        >
                             📏 AR 실측(AI 측정)
-                        </a>
+                        </button>
                     </div>
                 </header>
 
