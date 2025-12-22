@@ -1,9 +1,9 @@
+"use client";
+
 const BUILD_INFO = {
     version: "2025-12-22-AR-STEP",
     deployedAt: "2025-12-22 17:40",
 };
-
-"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
