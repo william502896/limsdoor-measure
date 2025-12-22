@@ -440,9 +440,9 @@ export async function POST(req: Request) {
         zip.file(`${baseName}_OFFICE.xlsx`, xlsxBuf);
         zip.file(`${baseName}_CUSTOMER.pdf`, pdfBuf);
 
-        const zipBuf = await zip.generateAsync({ type: "nodebuffer" });
+        const zipBuf = await zip.generateAsync({ type: "uint8array" });
 
-        return new NextResponse(zipBuf, {
+        return new NextResponse(zipBuf as any, {
             headers: {
                 "Content-Type": "application/zip",
                 "Content-Disposition": `attachment; filename="${baseName}.zip"`,
