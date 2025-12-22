@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 
 type Point = {
     x: number;
@@ -84,27 +83,6 @@ export default function ArPage() {
         scene.add(reticle);
         reticleRef.current = reticle;
 
-        // AR Button Customization
-        const button = ARButton.createButton(renderer, {
-            requiredFeatures: ["hit-test"],
-            optionalFeatures: ["dom-overlay"],
-            domOverlay: { root: document.body },
-        });
-
-        // 커스텀 스타일 및 텍스트 적용
-        button.innerText = "AR 카메라 시작";
-        button.style.backgroundColor = "#3b82f6"; // Blue
-        button.style.borderRadius = "24px";
-        button.style.border = "none";
-        button.style.color = "white";
-        button.style.fontWeight = "bold";
-        button.style.padding = "12px 24px";
-        button.style.fontSize = "16px";
-        button.style.bottom = "100px"; // 위치 조정해서 하단 버튼과 안 겹치게
-        button.style.opacity = "1";
-
-        document.body.appendChild(button);
-
         // Controller (Tap Event)
         const controller = renderer.xr.getController(0);
         controller.addEventListener("select", onSelect);
@@ -132,10 +110,11 @@ export default function ArPage() {
                         });
                     });
 
+                    // Session End Handler
                     session.addEventListener("end", () => {
                         hitTestSourceRequestedRef.current = false;
                         hitTestSourceRef.current = null;
-                        button.style.display = "block"; // Reset button visibility logic if needed
+                        setStatus("AR 세션이 종료되었습니다.");
                     });
 
                     hitTestSourceRequestedRef.current = true;
@@ -150,11 +129,11 @@ export default function ArPage() {
                         if (pose) {
                             reticle.visible = true;
                             reticle.matrix.fromArray(pose.transform.matrix);
-                            setStatus("조준점(흰색 고리)이 보이면 화면을 터치하세요.");
+                            // Avoid updating status every frame to prevent React render thrashing
+                            // but here we just set it once when finding plane usually
                         }
                     } else {
                         reticle.visible = false;
-                        setStatus("바닥이나 벽을 천천히 비춰주세요...");
                     }
                 }
             }
@@ -173,19 +152,18 @@ export default function ArPage() {
             if (rendererRef.current) {
                 rendererRef.current.setAnimationLoop(null);
             }
-            if (document.body.contains(button)) {
-                document.body.removeChild(button);
+            // Cleanup DOM
+            if (containerRef.current && rendererRef.current) {
+                // containerRef.current.removeChild(rendererRef.current.domElement);
             }
             window.removeEventListener("resize", onWindowResize);
-            // clean up scenes if complex
         };
     }, []);
 
     const addPoint = (pos: THREE.Vector3) => {
         if (!sceneRef.current) return;
 
-        // Check if we already have 2 points (full line)
-        // If so, reset
+        // Check if we already have 2 points (full line) -> reset
         if (pointsRef.current.length >= 2) {
             clearMeasurements();
         }
@@ -239,11 +217,34 @@ export default function ArPage() {
 
     const onComplete = () => {
         if (distance === null) return;
-        // Save to localStorage or similar to pass back
-        // Or just copy to clipboard
         navigator.clipboard.writeText(String(distance));
         alert(`측정값 ${distance}mm가 복사되었습니다.\n실측 화면에 붙여넣기 하세요.`);
         window.location.href = "/field/new";
+    };
+
+    const startAR = async () => {
+        if (!navigator.xr) {
+            alert("WebXR을 지원하지 않는 브라우저입니다.");
+            return;
+        }
+
+        try {
+            const session = await (navigator as any).xr.requestSession("immersive-ar", {
+                requiredFeatures: ["hit-test"],
+                optionalFeatures: ["dom-overlay"],
+                domOverlay: { root: document.body },
+            });
+
+            if (!rendererRef.current) return;
+            rendererRef.current.xr.setReferenceSpaceType("local");
+            rendererRef.current.xr.setSession(session);
+
+            setStatus("바닥이나 벽을 천천히 비춰주세요...");
+
+        } catch (e) {
+            console.error(e);
+            alert("AR 세션을 시작할 수 없습니다. (HTTPS/호환 기기 확인)");
+        }
     };
 
     return (
@@ -261,7 +262,6 @@ export default function ArPage() {
                 zIndex: 10
             }}>
                 <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>📏 AR 실측 (BETA)</h1>
-                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>📏 AR 실측 (BETA)</h1>
                 <p style={{ margin: "5px 0", fontSize: 14, opacity: 0.9 }}>{status}</p>
 
                 {isSupported === false && (
@@ -278,6 +278,39 @@ export default function ArPage() {
                 )}
             </div>
 
+            {/* Custom Start Button (replaces WebXR default button) */}
+            {isSupported !== false && status.includes("시작 버튼") && (
+                <div style={{
+                    position: "absolute",
+                    top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 20,
+                    textAlign: "center",
+                    width: "100%",
+                }}>
+                    <div style={{ fontSize: 48, marginBottom: 20 }}>📸</div>
+                    <button
+                        onClick={startAR}
+                        style={{
+                            padding: "16px 32px",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            color: "#fff",
+                            backgroundColor: "#3b82f6",
+                            border: "none",
+                            borderRadius: "30px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                            cursor: "pointer"
+                        }}
+                    >
+                        AR 카메라 시작
+                    </button>
+                    <p style={{ color: "#aaa", marginTop: 16, fontSize: 14 }}>
+                        버튼을 누르고 카메라 권한을 허용해주세요.
+                    </p>
+                </div>
+            )}
+
             <div style={{
                 position: "absolute",
                 bottom: 40, width: "100%",
@@ -287,14 +320,14 @@ export default function ArPage() {
             }}>
                 <button
                     onClick={() => window.location.href = "/field/new"}
-                    style={{ padding: "12px 20px", borderRadius: 24, border: "none", background: "#374151", color: "#fff" }}
+                    style={{ padding: "12px 20px", borderRadius: 24, border: "none", background: "#374151", color: "#fff", cursor: "pointer" }}
                 >
                     취소 / 돌아가기
                 </button>
                 {distance !== null && (
                     <button
                         onClick={onComplete}
-                        style={{ padding: "12px 24px", borderRadius: 24, border: "none", background: "#3b82f6", color: "#fff", fontWeight: "bold" }}
+                        style={{ padding: "12px 24px", borderRadius: 24, border: "none", background: "#3b82f6", color: "#fff", fontWeight: "bold", cursor: "pointer" }}
                     >
                         측정값 사용 ({distance}mm)
                     </button>
@@ -302,8 +335,9 @@ export default function ArPage() {
             </div>
 
             <style jsx global>{`
-                /* Hide 'Start AR' button initially to customize or just accept default */
-                /* Three.js ARButton styles it automatically at bottom center */
+                button:active {
+                    transform: scale(0.95);
+                }
             `}</style>
         </div>
     );
