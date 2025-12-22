@@ -7,6 +7,7 @@ const BUILD_INFO = {
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
+import VirtualPreviewModal from "../../components/VirtualPreviewModal";
 
 const STORAGE_KEY = "limsdoor_admin_settings_v1";
 
@@ -596,6 +597,13 @@ export default function FieldNewPage() {
     // AI 결과 상태
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [aiResult, setAiResult] = useState("");
+
+    // Field Images
+    const [siteImage, setSiteImage] = useState<string | null>(null);
+    const [sketchImage, setSketchImage] = useState<string | null>(null);
+
+    // AI Virtual Preview Modal State (Must exist)
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
 
     useEffect(() => {
         const data = readAdminSettings();
