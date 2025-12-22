@@ -9,10 +9,19 @@ type Point = {
     z: number;
 };
 
+// Workflow State: 'idle' -> 'width' (2 points) -> 'height' (2 points) -> 'complete'
+type MeasureStep = "idle" | "width" | "height" | "complete";
+
 export default function ArPage() {
-    const [distance, setDistance] = useState<number | null>(null);
-    const [points, setPoints] = useState<Point[]>([]);
+    // Measurements
+    const [widthVal, setWidthVal] = useState<number | null>(null);
+    const [heightVal, setHeightVal] = useState<number | null>(null);
+
+    // Workflow
+    const [step, setStep] = useState<MeasureStep>("idle");
     const [status, setStatus] = useState("AR 시작 버튼을 눌러주세요");
+
+    // System
     const [isIOS, setIsIOS] = useState(false);
     const [isSupported, setIsSupported] = useState<boolean | null>(null);
     const [isArRunning, setIsArRunning] = useState(false);
@@ -27,8 +36,12 @@ export default function ArPage() {
     const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
     const hitTestSourceRequestedRef = useRef(false);
 
-    const pointsRef = useRef<THREE.Mesh[]>([]);
-    const lineRef = useRef<THREE.Line | null>(null);
+    // Points logic
+    const currentPointsRef = useRef<THREE.Mesh[]>([]); // Current step points (max 2)
+    const activeLineRef = useRef<THREE.Line | null>(null); // Current step line
+
+    // Store all visuals to clear later
+    const allMeshesRef = useRef<THREE.Object3D[]>([]);
 
     // Check iOS
     useEffect(() => {
@@ -76,7 +89,7 @@ export default function ArPage() {
         scene.add(light);
 
         // ============================================
-        // ✅ Improved Reticle (High Visibility)
+        // ✅ Reticle (Crosshair + Dot)
         // ============================================
         const reticleGroup = new THREE.Group();
         reticleGroup.matrixAutoUpdate = false;
@@ -84,38 +97,36 @@ export default function ArPage() {
         scene.add(reticleGroup);
         reticleRef.current = reticleGroup;
 
-        // 1. Precise Outer Ring (Cyan)
+        // Outer Ring (Cyan)
         const ringGeo = new THREE.RingGeometry(0.04, 0.05, 32).rotateX(-Math.PI / 2);
         const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
         const ring = new THREE.Mesh(ringGeo, ringMat);
         reticleGroup.add(ring);
 
-        // 2. Crosshair Lines (White, Thin)
+        // Crosshair Lines (White)
         const lineGeo = new THREE.PlaneGeometry(0.3, 0.003).rotateX(-Math.PI / 2);
         const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const line1 = new THREE.Mesh(lineGeo, lineMat); // Horizontal
-        const line2 = new THREE.Mesh(lineGeo, lineMat); // Vertical
+        const line1 = new THREE.Mesh(lineGeo, lineMat);
+        const line2 = new THREE.Mesh(lineGeo, lineMat);
         line2.rotation.y = Math.PI / 2;
         reticleGroup.add(line1);
         reticleGroup.add(line2);
 
-        // 3. Center Dot (Red)
+        // Center Dot (Red)
         const dotGeo = new THREE.CircleGeometry(0.008, 32).rotateX(-Math.PI / 2);
         const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const dot = new THREE.Mesh(dotGeo, dotMat);
         reticleGroup.add(dot);
 
-        // Controller (Tap Event)
+        // Controller
         const controller = renderer.xr.getController(0);
         controller.addEventListener("select", onSelect);
         scene.add(controller);
 
         function onSelect() {
             if (!reticleGroup.visible) return;
-
             const position = new THREE.Vector3();
             position.setFromMatrixPosition(reticleGroup.matrix);
-
             addPoint(position);
         }
 
@@ -137,8 +148,8 @@ export default function ArPage() {
                         hitTestSourceRef.current = null;
                         setStatus("AR 세션이 종료되었습니다.");
                         setIsArRunning(false);
+                        setStep("idle"); // Reset workflow
                     });
-
                     hitTestSourceRequestedRef.current = true;
                 }
 
@@ -151,14 +162,12 @@ export default function ArPage() {
                         if (pose) {
                             reticleGroup.visible = true;
                             reticleGroup.matrix.fromArray(pose.transform.matrix);
-                            // Avoid setting status every frame if possible
                         }
                     } else {
                         reticleGroup.visible = false;
                     }
                 }
             }
-
             renderer.render(scene, camera);
         });
 
@@ -173,78 +182,80 @@ export default function ArPage() {
             if (rendererRef.current) {
                 rendererRef.current.setAnimationLoop(null);
             }
-            if (containerRef.current && rendererRef.current) {
-                // containerRef.current.removeChild(rendererRef.current.domElement);
-            }
             window.removeEventListener("resize", onWindowResize);
         };
-    }, []);
+    }, []); // eslint-disable-next-line react-hooks/exhaustive-deps
 
+    // ==========================================
+    // Core Logic: Point Addition based on Step
+    // ==========================================
     const addPoint = (pos: THREE.Vector3) => {
         if (!sceneRef.current) return;
 
-        if (pointsRef.current.length >= 2) {
-            clearMeasurements();
-        }
+        // Only allow adding points in 'width' or 'height' steps
+        if (step !== 'width' && step !== 'height') return;
 
-        // Add Marker
-        const geometry = new THREE.SphereGeometry(0.03, 32, 32); // Smaller marker
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        // Visual Marker
+        const geometry = new THREE.SphereGeometry(0.03, 32, 32);
+        const material = new THREE.MeshBasicMaterial({ color: step === 'width' ? 0xffff00 : 0x00ff00 }); // Yellow for Width, Green for Height
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(pos);
         sceneRef.current.add(mesh);
-        pointsRef.current.push(mesh);
 
-        const newPoints = [...points, { x: pos.x, y: pos.y, z: pos.z }];
-        setPoints(newPoints);
+        currentPointsRef.current.push(mesh);
+        allMeshesRef.current.push(mesh);
 
-        if (pointsRef.current.length === 2) {
-            const p1 = pointsRef.current[0].position;
-            const p2 = pointsRef.current[1].position;
+        // Check Progress (1st Point or 2nd Point?)
+        if (currentPointsRef.current.length === 1) {
+            setStatus("첫 번째 점 완료. 반대편 점을 찍어주세요.");
+        } else if (currentPointsRef.current.length === 2) {
+            // 2nd Point -> Calculate Distance
+            const p1 = currentPointsRef.current[0].position;
+            const p2 = currentPointsRef.current[1].position;
             const distM = p1.distanceTo(p2);
             const distMm = Math.round(distM * 1000);
-            setDistance(distMm);
-            setStatus(`측정 완료: ${distMm}mm`);
 
+            // Draw Line
             const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 4 });
+            const lineMat = new THREE.LineBasicMaterial({
+                color: step === 'width' ? 0xffff00 : 0x00ff00,
+                linewidth: 4
+            });
             const line = new THREE.Line(lineGeo, lineMat);
             sceneRef.current.add(line);
-            lineRef.current = line;
-        } else {
-            setStatus("첫 번째 점 완료. 개구부 반대쪽 안쪽을 찍어주세요.");
+            allMeshesRef.current.push(line);
+
+            // State Action
+            if (step === 'width') {
+                setWidthVal(distMm);
+                setStatus(`가로 ${distMm}mm 측정 완료! 2초 후 세로 측정으로 넘어갑니다.`);
+
+                // Auto transition to Height after delay
+                setTimeout(() => {
+                    startHeightMeasurement();
+                }, 2000);
+            } else if (step === 'height') {
+                setHeightVal(distMm);
+                setStep('complete');
+                setStatus(`세로 ${distMm}mm 측정 완료! 측정값이 저장되었습니다.`);
+            }
+
+            // Cleanup current points ref for next step, BUT keep meshes in scene
+            currentPointsRef.current = [];
         }
     };
 
-    const clearMeasurements = () => {
-        if (!sceneRef.current) return;
-
-        pointsRef.current.forEach(p => sceneRef.current?.remove(p));
-        pointsRef.current = [];
-
-        if (lineRef.current) {
-            sceneRef.current.remove(lineRef.current);
-            lineRef.current = null;
-        }
-
-        setPoints([]);
-        setDistance(null);
-        setStatus("다시 측정하려면 바닥/벽을 비추고 터치하세요.");
-    };
-
-    const onComplete = () => {
-        if (distance === null) return;
-        navigator.clipboard.writeText(String(distance));
-        alert(`측정값 ${distance}mm가 복사되었습니다.\n실측 화면에 붙여넣기 하세요.`);
-        window.location.href = "/field/new";
-    };
+    const startHeightMeasurement = () => {
+        setStep("height");
+        setStatus("STEP 2: 세로(높이) 측정 - 위/아래 모서리를 찍어주세요.");
+        currentPointsRef.current = []; // Ensure clear
+    }
 
     const startAR = async () => {
         if (!navigator.xr) {
             alert("WebXR을 지원하지 않는 브라우저입니다.");
             return;
         }
-
         try {
             const session = await (navigator as any).xr.requestSession("immersive-ar", {
                 requiredFeatures: ["hit-test"],
@@ -256,13 +267,34 @@ export default function ArPage() {
             rendererRef.current.xr.setReferenceSpaceType("local");
             rendererRef.current.xr.setSession(session);
 
-            setStatus("개구부 안쪽 모서리를 천천히 비춰주세요...");
+            // Start Workflow
             setIsArRunning(true);
+            setStep("width");
+            setWidthVal(null);
+            setHeightVal(null);
+            currentPointsRef.current = [];
+
+            // Clear previous meshes
+            allMeshesRef.current.forEach(obj => sceneRef.current?.remove(obj));
+            allMeshesRef.current = [];
+
+            setStatus("STEP 1: 가로(너비) 측정 - 좌/우 모서리를 찍어주세요.");
 
         } catch (e) {
             console.error(e);
             alert("AR 세션을 시작할 수 없습니다. (HTTPS/호환 기기 확인)");
         }
+    };
+
+    const onComplete = () => {
+        const textToCopy = `가로:${widthVal}, 세로:${heightVal}`;
+        navigator.clipboard.writeText(textToCopy);
+        const params = new URLSearchParams();
+        if (widthVal) params.set("width", String(widthVal));
+        if (heightVal) params.set("height", String(heightVal));
+
+        alert(`측정값(가로 ${widthVal}, 세로 ${heightVal})이 복사되었습니다.\n입력 화면으로 이동합니다.`);
+        window.location.href = `/field/new?${params.toString()}`;
     };
 
     return (
@@ -284,34 +316,40 @@ export default function ArPage() {
                     {status}
                 </p>
 
-                {isSupported === false && (
-                    <div style={{ background: "rgba(255,50,50,0.8)", padding: 10, borderRadius: 8, marginTop: 10, fontSize: 12 }}>
-                        ⚠️ AR 미지원: HTTPS 접속인지, 또는 호환되는 Android Chrome인지 확인해주세요.
-                    </div>
-                )}
-
-                {isIOS && (
-                    <div style={{ background: "rgba(255,50,50,0.8)", padding: 10, borderRadius: 8, marginTop: 10, fontSize: 12 }}>
-                        ⚠️ 아이폰 주의: Safari에서는 작동하지 않을 수 있습니다.
-                        App Store에서 <b>'WebXR Viewer'</b>(Mozilla) 앱을 설치하여 실행해주세요.
+                {/* Values Display */}
+                {(widthVal !== null || heightVal !== null) && (
+                    <div style={{ marginTop: 10, fontSize: 14, background: "rgba(0,0,0,0.6)", padding: 8, borderRadius: 8 }}>
+                        {widthVal && <div>↔ 가로: <span style={{ color: "#ffff00", fontWeight: "bold" }}>{widthVal}mm</span></div>}
+                        {heightVal && <div>↕ 세로: <span style={{ color: "#00ff00", fontWeight: "bold" }}>{heightVal}mm</span></div>}
                     </div>
                 )}
             </div>
 
-            {/* Static Crosshair Overlay (Only when AR is running) */}
-            {isArRunning && (
+            {/* State-Based Guide Lines (CSS Overlay) */}
+            {isArRunning && step === 'width' && (
                 <div style={{
                     position: "absolute",
-                    top: "50%", left: "50%",
-                    transform: "translate(-50%, -50%)",
+                    top: "50%", left: "10%", right: "10%", height: 0,
+                    borderBottom: "2px dotted rgba(255, 255, 0, 0.8)", // Yellow Dotted
                     pointerEvents: "none",
-                    zIndex: 15,
-                    opacity: 0.7
+                    zIndex: 5
                 }}>
-                    <div style={{ width: 40, height: 2, background: "#fff", position: "absolute", top: 0, left: -20, boxShadow: "0 0 2px #000" }}></div>
-                    <div style={{ width: 2, height: 40, background: "#fff", position: "absolute", top: -20, left: 0, boxShadow: "0 0 2px #000" }}></div>
-                    <div style={{ position: "absolute", top: 30, left: -100, width: 200, textAlign: "center", color: "yellow", fontSize: 13, textShadow: "0 1px 2px #000" }}>
-                        ▲ 개구부 안쪽 모서리 일치 ▲
+                    <div style={{ position: "absolute", top: -25, width: "100%", textAlign: "center", color: "yellow", fontSize: 12 }}>
+                        가로 측정 가이드선
+                    </div>
+                </div>
+            )}
+
+            {isArRunning && step === 'height' && (
+                <div style={{
+                    position: "absolute",
+                    left: "50%", top: "15%", bottom: "15%", width: 0,
+                    borderLeft: "2px dotted rgba(0, 255, 0, 0.8)", // Green Dotted
+                    pointerEvents: "none",
+                    zIndex: 5
+                }}>
+                    <div style={{ position: "absolute", left: 10, top: "50%", color: "#00ff00", fontSize: 12, width: 100 }}>
+                        세로 측정 가이드선
                     </div>
                 </div>
             )}
@@ -341,14 +379,15 @@ export default function ArPage() {
                             cursor: "pointer"
                         }}
                     >
-                        AR 카메라 시작
+                        AR 가로/세로 측정 시작
                     </button>
                     <p style={{ color: "#aaa", marginTop: 16, fontSize: 14 }}>
-                        개구부 <b>안쪽 사이즈</b>를 측정합니다.
+                        가로(너비) 측정 후<br />자동으로 세로(높이) 측정으로 이어집니다.
                     </p>
                 </div>
             )}
 
+            {/* Bottom Controls */}
             <div style={{
                 position: "absolute",
                 bottom: 40, width: "100%",
@@ -362,12 +401,13 @@ export default function ArPage() {
                 >
                     취소 / 돌아가기
                 </button>
-                {distance !== null && (
+
+                {step === 'complete' && widthVal && heightVal && (
                     <button
                         onClick={onComplete}
                         style={{ padding: "12px 24px", borderRadius: 24, border: "none", background: "#3b82f6", color: "#fff", fontWeight: "bold", cursor: "pointer" }}
                     >
-                        측정값 사용 ({distance}mm)
+                        측정값 사용하기
                     </button>
                 )}
             </div>
