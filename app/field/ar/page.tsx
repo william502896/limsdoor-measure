@@ -21,6 +21,10 @@ export default function ArPage() {
     const [step, setStep] = useState<MeasureStep>("idle");
     const [status, setStatus] = useState("AR 시작 버튼을 눌러주세요");
 
+    // Accuracy Helpers
+    const [cameraDist, setCameraDist] = useState<number | null>(null); // Distance to wall (cm)
+    const [isOptimalRange, setIsOptimalRange] = useState(false); // 0.3m ~ 1.5m
+
     // System
     const [isIOS, setIsIOS] = useState(false);
     const [isSupported, setIsSupported] = useState<boolean | null>(null);
@@ -33,14 +37,14 @@ export default function ArPage() {
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const reticleRef = useRef<THREE.Group | null>(null);
+    const ringMatRef = useRef<THREE.MeshBasicMaterial | null>(null); // To change color
+    const dotMatRef = useRef<THREE.MeshBasicMaterial | null>(null); // To change color
+
     const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
     const hitTestSourceRequestedRef = useRef(false);
 
     // Points logic
     const currentPointsRef = useRef<THREE.Mesh[]>([]); // Current step points (max 2)
-    const activeLineRef = useRef<THREE.Line | null>(null); // Current step line
-
-    // Store all visuals to clear later
     const allMeshesRef = useRef<THREE.Object3D[]>([]);
 
     // Check iOS
@@ -89,7 +93,7 @@ export default function ArPage() {
         scene.add(light);
 
         // ============================================
-        // ✅ Reticle (Crosshair + Dot)
+        // ✅ Reticle (Crosshair + Ring)
         // ============================================
         const reticleGroup = new THREE.Group();
         reticleGroup.matrixAutoUpdate = false;
@@ -97,24 +101,18 @@ export default function ArPage() {
         scene.add(reticleGroup);
         reticleRef.current = reticleGroup;
 
-        // Outer Ring (Cyan)
+        // Dynamic Materials for Color Changing
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Default Red
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });  // Default Red
+        ringMatRef.current = ringMat;
+        dotMatRef.current = dotMat;
+
+        // Geom
         const ringGeo = new THREE.RingGeometry(0.04, 0.05, 32).rotateX(-Math.PI / 2);
-        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
         const ring = new THREE.Mesh(ringGeo, ringMat);
         reticleGroup.add(ring);
 
-        // Crosshair Lines (White)
-        const lineGeo = new THREE.PlaneGeometry(0.3, 0.003).rotateX(-Math.PI / 2);
-        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const line1 = new THREE.Mesh(lineGeo, lineMat);
-        const line2 = new THREE.Mesh(lineGeo, lineMat);
-        line2.rotation.y = Math.PI / 2;
-        reticleGroup.add(line1);
-        reticleGroup.add(line2);
-
-        // Center Dot (Red)
         const dotGeo = new THREE.CircleGeometry(0.008, 32).rotateX(-Math.PI / 2);
-        const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const dot = new THREE.Mesh(dotGeo, dotMat);
         reticleGroup.add(dot);
 
@@ -124,7 +122,10 @@ export default function ArPage() {
         scene.add(controller);
 
         function onSelect() {
-            if (!reticleGroup.visible) return;
+            if (!reticleGroup.visible) {
+                setStatus("⚠️ 표면을 찾을 수 없습니다. (빨간색 조준점이 보여야 합니다)");
+                return;
+            }
             const position = new THREE.Vector3();
             position.setFromMatrixPosition(reticleGroup.matrix);
             addPoint(position);
@@ -148,7 +149,7 @@ export default function ArPage() {
                         hitTestSourceRef.current = null;
                         setStatus("AR 세션이 종료되었습니다.");
                         setIsArRunning(false);
-                        setStep("idle"); // Reset workflow
+                        setStep("idle");
                     });
                     hitTestSourceRequestedRef.current = true;
                 }
@@ -162,9 +163,38 @@ export default function ArPage() {
                         if (pose) {
                             reticleGroup.visible = true;
                             reticleGroup.matrix.fromArray(pose.transform.matrix);
+
+                            // ============================
+                            // 📏 Distance Calculation
+                            // ============================
+                            const reticlePos = new THREE.Vector3().setFromMatrixPosition(reticleGroup.matrix);
+                            const cameraPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld); // Camera position in world space
+
+                            // Usually in WebXR 'local' space, camera starts at 0,0,0 but best to get from matrix
+                            // Note: In Three.js WebXR, camera position is updated automatically.
+
+                            const distM = cameraPos.distanceTo(reticlePos);
+                            const distCm = Math.round(distM * 100);
+
+                            // Update State (Throttle this in production, but here roughly ok)
+                            // React state updates in loop can be heavy, but for simple text it might be fine on modern phones.
+                            // To optimize, we could ref a DOM element directly, but let's try state first.
+                            if (Math.abs((cameraDist ?? 0) - distCm) > 5) { // Only update if changed > 5cm to reduce renders
+                                setCameraDist(distCm);
+
+                                // Optimal Range: 30cm ~ 150cm (0.3 ~ 1.5m)
+                                const isOptimal = distM >= 0.3 && distM <= 1.5;
+                                setIsOptimalRange(isOptimal);
+
+                                // Update Color
+                                const color = isOptimal ? 0x00ff00 : 0xff0000; // Green vs Red
+                                if (ringMatRef.current) ringMatRef.current.color.setHex(color);
+                                if (dotMatRef.current) dotMatRef.current.color.setHex(color);
+                            }
                         }
                     } else {
                         reticleGroup.visible = false;
+                        setCameraDist(null);
                     }
                 }
             }
@@ -184,20 +214,15 @@ export default function ArPage() {
             }
             window.removeEventListener("resize", onWindowResize);
         };
-    }, []); // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cameraDist]); // Add dependency if needed, but refs cover it mostly
 
-    // ==========================================
-    // Core Logic: Point Addition based on Step
-    // ==========================================
     const addPoint = (pos: THREE.Vector3) => {
         if (!sceneRef.current) return;
-
-        // Only allow adding points in 'width' or 'height' steps
         if (step !== 'width' && step !== 'height') return;
 
-        // Visual Marker
-        const geometry = new THREE.SphereGeometry(0.03, 32, 32);
-        const material = new THREE.MeshBasicMaterial({ color: step === 'width' ? 0xffff00 : 0x00ff00 }); // Yellow for Width, Green for Height
+        // Add Marker
+        const geometry = new THREE.SphereGeometry(0.02, 32, 32);
+        const material = new THREE.MeshBasicMaterial({ color: isOptimalRange ? 0x00ff00 : 0xffff00 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(pos);
         sceneRef.current.add(mesh);
@@ -205,11 +230,9 @@ export default function ArPage() {
         currentPointsRef.current.push(mesh);
         allMeshesRef.current.push(mesh);
 
-        // Check Progress (1st Point or 2nd Point?)
         if (currentPointsRef.current.length === 1) {
             setStatus("첫 번째 점 완료. 반대편 점을 찍어주세요.");
         } else if (currentPointsRef.current.length === 2) {
-            // 2nd Point -> Calculate Distance
             const p1 = currentPointsRef.current[0].position;
             const p2 = currentPointsRef.current[1].position;
             const distM = p1.distanceTo(p2);
@@ -219,28 +242,23 @@ export default function ArPage() {
             const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
             const lineMat = new THREE.LineBasicMaterial({
                 color: step === 'width' ? 0xffff00 : 0x00ff00,
-                linewidth: 4
+                linewidth: 3,
             });
             const line = new THREE.Line(lineGeo, lineMat);
             sceneRef.current.add(line);
             allMeshesRef.current.push(line);
 
-            // State Action
             if (step === 'width') {
                 setWidthVal(distMm);
-                setStatus(`가로 ${distMm}mm 측정 완료! 2초 후 세로 측정으로 넘어갑니다.`);
-
-                // Auto transition to Height after delay
+                setStatus(`가로 ${distMm}mm 완료! 2초 후 세로 측정 시작...`);
                 setTimeout(() => {
                     startHeightMeasurement();
                 }, 2000);
             } else if (step === 'height') {
                 setHeightVal(distMm);
                 setStep('complete');
-                setStatus(`세로 ${distMm}mm 측정 완료! 측정값이 저장되었습니다.`);
+                setStatus(`측정 완료! (가로 ${widthVal}, 세로 ${distMm})`);
             }
-
-            // Cleanup current points ref for next step, BUT keep meshes in scene
             currentPointsRef.current = [];
         }
     };
@@ -248,7 +266,7 @@ export default function ArPage() {
     const startHeightMeasurement = () => {
         setStep("height");
         setStatus("STEP 2: 세로(높이) 측정 - 위/아래 모서리를 찍어주세요.");
-        currentPointsRef.current = []; // Ensure clear
+        currentPointsRef.current = [];
     }
 
     const startAR = async () => {
@@ -267,14 +285,12 @@ export default function ArPage() {
             rendererRef.current.xr.setReferenceSpaceType("local");
             rendererRef.current.xr.setSession(session);
 
-            // Start Workflow
             setIsArRunning(true);
             setStep("width");
             setWidthVal(null);
             setHeightVal(null);
             currentPointsRef.current = [];
 
-            // Clear previous meshes
             allMeshesRef.current.forEach(obj => sceneRef.current?.remove(obj));
             allMeshesRef.current = [];
 
@@ -325,31 +341,48 @@ export default function ArPage() {
                 )}
             </div>
 
-            {/* State-Based Guide Lines (CSS Overlay) */}
-            {isArRunning && step === 'width' && (
+            {/* MINIMAL Center Crosshair for Aiming */}
+            {isArRunning && step !== 'complete' && (
                 <div style={{
                     position: "absolute",
-                    top: "50%", left: "10%", right: "10%", height: 0,
-                    borderBottom: "2px dotted rgba(255, 255, 0, 0.8)", // Yellow Dotted
+                    top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%)",
                     pointerEvents: "none",
-                    zIndex: 5
+                    zIndex: 5,
+                    opacity: 0.8
                 }}>
-                    <div style={{ position: "absolute", top: -25, width: "100%", textAlign: "center", color: "yellow", fontSize: 12 }}>
-                        가로 측정 가이드선
+                    <div style={{ width: 24, height: 2, background: "#fff", position: "absolute", left: -12, top: 0 }}></div>
+                    <div style={{ width: 2, height: 24, background: "#fff", position: "absolute", left: 0, top: -12 }}></div>
+
+                    <div style={{ position: "absolute", top: 25, left: -60, width: 120, textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>
+                        {step === 'width' ? "↔ 가로" : "↕ 세로"}
                     </div>
                 </div>
             )}
 
-            {isArRunning && step === 'height' && (
+            {/* DISTANCE FEEDBACK (Top Center Overlay) */}
+            {isArRunning && cameraDist !== null && (
                 <div style={{
                     position: "absolute",
-                    left: "50%", top: "15%", bottom: "15%", width: 0,
-                    borderLeft: "2px dotted rgba(0, 255, 0, 0.8)", // Green Dotted
+                    top: 100, left: "50%",
+                    transform: "translateX(-50%)",
                     pointerEvents: "none",
-                    zIndex: 5
+                    zIndex: 20,
+                    textAlign: "center"
                 }}>
-                    <div style={{ position: "absolute", left: 10, top: "50%", color: "#00ff00", fontSize: 12, width: 100 }}>
-                        세로 측정 가이드선
+                    <div style={{
+                        color: isOptimalRange ? "#00ff00" : "#ff3333",
+                        fontWeight: "bold",
+                        fontSize: "18px",
+                        background: "rgba(0,0,0,0.7)",
+                        padding: "8px 16px",
+                        borderRadius: "20px",
+                        border: isOptimalRange ? "2px solid #00ff00" : "2px solid #ff3333"
+                    }}>
+                        거리: {cameraDist}cm
+                        <div style={{ fontSize: "12px", color: "#fff", marginTop: 4, fontWeight: "normal" }}>
+                            {isOptimalRange ? "✅ 측정하기 좋은 거리입니다" : "❌ 50~150cm 거리에서 측정하세요"}
+                        </div>
                     </div>
                 </div>
             )}
@@ -381,9 +414,14 @@ export default function ArPage() {
                     >
                         AR 가로/세로 측정 시작
                     </button>
-                    <p style={{ color: "#aaa", marginTop: 16, fontSize: 14 }}>
-                        가로(너비) 측정 후<br />자동으로 세로(높이) 측정으로 이어집니다.
-                    </p>
+                    {/* Calibration / Accuracy Tip */}
+                    <div style={{ marginTop: 24, background: "rgba(255,255,255,0.1)", padding: 12, borderRadius: 8, maxWidth: "80%", marginLeft: "auto", marginRight: "auto" }}>
+                        <p style={{ color: "#ccc", margin: 0, fontSize: 13, textAlign: "left" }}>
+                            💡 <b>정확도 팁:</b><br />
+                            1. <b>약 1m 거리</b>에서 천천히 움직이세요.<br />
+                            2. <b>스마트폰, 500ml 물병</b> 등 아는 물건을 먼저 측정해보고 정밀도를 확인하시면 좋습니다.
+                        </p>
+                    </div>
                 </div>
             )}
 
