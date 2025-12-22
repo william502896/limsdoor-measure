@@ -683,6 +683,7 @@ export default function FieldNewPage() {
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerAddress, setCustomerAddress] = useState("");
+    const [detailAddress, setDetailAddress] = useState(""); // Detailed Address (Manual)
 
     // 실측자(관리자 저장값 자동 기입)
     const [measurerName, setMeasurerName] = useState("");
@@ -914,11 +915,13 @@ export default function FieldNewPage() {
             ? `\n\n💳 결재 방식\n- ${paymentMethod} (부가세 10% 적용)\n- 공급가: ${formatWon(vatInfo.supplyAmount)}\n- 부가세: ${formatWon(vatInfo.vatAmount)}\n- 결재 합계: ${formatWon(vatInfo.totalPayable)}`
             : `\n\n💳 결재 방식\n- ${paymentMethod} (부가세 미적용)\n- 결재 합계: ${formatWon(vatInfo.totalPayable)}`;
 
+        const fullAddr = `${customerAddress} ${detailAddress}`.trim();
+
         return (
             `✅ 실측 정보\n` +
             `- 고객: ${customerName}\n` +
             `- 연락처: ${customerPhone}\n` +
-            `- 주소: ${customerAddress}\n` +
+            `- 주소: ${fullAddr}\n` +
             `- 시공 위치: ${installLocation}\n` +
             `- 수량: ${quantity}조\n` +
             `- 제품비 입금일: ${depositDate}\n` +
@@ -969,11 +972,13 @@ export default function FieldNewPage() {
                 `- 시공비(표시용/패키지 포함): ${formatWon(displayInstallCost)}\n`
             : `\n💰 금액 안내\n- 제품비: 사무실 확인\n`;
 
+        const fullAddr = `${customerAddress} ${detailAddress}`.trim();
+
         const baseInfo =
             `📌 림스도어 실측/시공 안내\n` +
             `- 고객: ${customerName || "-"}\n` +
             `- 연락처: ${customerPhone || "-"}\n` +
-            `- 주소: ${customerAddress || "-"}\n` +
+            `- 주소: ${fullAddr || "-"}\n` +
             `- 시공위치: ${installLocation}\n` +
             `- 수량: ${quantity}조\n` +
             `- 문종류: ${category} / ${detail}\n` +
@@ -1074,8 +1079,51 @@ export default function FieldNewPage() {
         openMailComposer(admin.officeEmail, "[림스도어] 실측 전송", officeText);
     };
 
-    const sendCustomer = () => {
+    // Base64 to File Converter
+    const dataURLtoFile = (dataurl: string, filename: string) => {
+        const arr = dataurl.split(',');
+        const mime = arr[0].match(/:(.*?);/)![1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    };
+
+    const sendCustomer = async () => {
         const smsText = buildCustomerSmsText();
+
+        // 1. Try Web Share API with Business Card if available
+        if (admin.businessCardImage && navigator.share) {
+            const confirmCard = confirm("등록된 '모바일 명함'을 함께 전송하시겠습니까?\n(지원되는 브라우저에서만 이미지가 첨부됩니다)");
+            if (confirmCard) {
+                try {
+                    const file = dataURLtoFile(admin.businessCardImage, `명함_${measurerName}.png`);
+
+                    // Must allow text + files. 
+                    // Note: Some apps ignore 'text' if 'files' are present.
+                    await navigator.share({
+                        text: smsText,
+                        files: [file]
+                    });
+                    return; // Success
+                } catch (e: any) {
+                    console.warn("Share failed (possibly cancelled or not supported for files):", e);
+                    // Fallback to normal SMS if users cancels share or generic error, 
+                    // BUT if user cancelled, maybe they don't want to send at all?
+                    // Usually correct to fallback to SMS link if share failed technically.
+                    if (e.name !== "AbortError") {
+                        alert("이미지 공유에 실패하여 텍스트만 전송 창을 엽니다.");
+                    } else {
+                        return; // User cancelled
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback: SMS Link
         openSmsComposer(customerPhone, smsText);
     };
 
@@ -1100,12 +1148,12 @@ export default function FieldNewPage() {
             return;
         }
         if (target === "customer") {
-            sendCustomer();
+            await sendCustomer();
             return;
         }
         if (target === "both") {
             await sendOffice(officeText);
-            sendCustomer();
+            await sendCustomer();
         }
     };
 
@@ -1273,16 +1321,86 @@ ${payload}`;
                             </label>
 
                             <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
-                                <span className={styles.labelText}>주소</span>
+                                <span className={styles.labelText}>주소 (GPS 자동)</span>
+                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                    <input
+                                        className={styles.input}
+                                        value={customerAddress}
+                                        onChange={(e) => setCustomerAddress(e.target.value)}
+                                        placeholder="📍 버튼을 누르면 자동 입력됩니다"
+                                        readOnly
+                                        style={{ backgroundColor: "#f9fafb" }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!navigator.geolocation) {
+                                                alert("GPS를 지원하지 않는 브라우저입니다.");
+                                                return;
+                                            }
+                                            const confirmGps = confirm("현재 위치를 기반으로 주소를 검색하시겠습니까?");
+                                            if (!confirmGps) return;
+
+                                            try {
+                                                const { lat, lng } = await new Promise<{ lat: number, lng: number }>((resolve, reject) => {
+                                                    navigator.geolocation.getCurrentPosition(
+                                                        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                                                        err => reject(err),
+                                                        { enableHighAccuracy: true, timeout: 10000 }
+                                                    );
+                                                });
+
+                                                // Use BigDataCloud Free Reverse Geocoding API (Client-side)
+                                                // Note: Needs explicit attribution if used commercially heavily, but fine for low volume internal tool.
+                                                // Or better yet, we can use Kakao/Naver if available, but let's try a free open API first.
+                                                // https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=ko
+
+                                                const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=ko`);
+                                                const data = await res.json();
+
+                                                // Construct address from data
+                                                // Format: { principalSubdivision, city, locality, ... }
+                                                const region = data.principalSubdivision || "";
+                                                const city = data.city || "";
+                                                const locality = data.locality || "";
+                                                const w3w = data.plusCode || ""; // Not useful
+
+                                                // Simple construction
+                                                const full = `${region} ${city} ${locality}`.replace(/\s+/g, " ").trim();
+
+                                                if (full) {
+                                                    setCustomerAddress(full);
+                                                    // Auto-focus detail? We need a ref ideally, but user will tap it.
+                                                } else {
+                                                    alert("주소를 찾을 수 없습니다. 직접 입력해주세요.");
+                                                    setCustomerAddress("직접 입력 필요");
+                                                }
+
+                                            } catch (e: any) {
+                                                console.error("GPS Error", e);
+                                                alert("GPS 정보를 가져오는데 실패했습니다: " + e.message);
+                                            }
+                                        }}
+                                        style={{
+                                            whiteSpace: "nowrap", padding: "0 16px", borderRadius: 8,
+                                            background: "#3b82f6", color: "#fff", border: "none", fontWeight: "bold",
+                                            cursor: "pointer"
+                                        }}
+                                    >
+                                        📍 내 위치 주소 찾기
+                                    </button>
+                                </div>
+
+                                <span className={styles.labelText} style={{ marginTop: 4 }}>상세 주소 (직접 입력)</span>
                                 <input
                                     className={styles.input}
-                                    value={customerAddress}
-                                    onChange={(e) => setCustomerAddress(e.target.value)}
-                                    placeholder="예: 구리시 한양아파트 101동 201호"
+                                    value={detailAddress}
+                                    onChange={(e) => setDetailAddress(e.target.value)}
+                                    placeholder="예: 한양아파트 101동 201호"
                                 />
                             </label>
 
-                            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
                                 <button
                                     type="button"
                                     className={styles.buttonGhost}
@@ -1291,42 +1409,13 @@ ${payload}`;
                                             const { lat, lng } = await getCurrentCoords();
                                             openKakaoMaps(lat, lng);
                                         } catch {
-                                            alert("위치 권한이 필요합니다.\n브라우저 또는 기기 설정에서 위치 접근을 허용해주세요.");
-                                        }
-                                    }}
-                                >
-                                    📍 GPS로 카카오지도 열기
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className={styles.buttonGhost}
-                                    onClick={async () => {
-                                        try {
-                                            const { lat, lng } = await getCurrentCoords();
-                                            openNaverMaps(lat, lng);
-                                        } catch {
                                             alert("위치 권한이 필요합니다.");
                                         }
                                     }}
                                 >
-                                    네이버지도
+                                    🗺️ 지도 열기 (카카오)
                                 </button>
-
-                                <button
-                                    type="button"
-                                    className={styles.buttonGhost}
-                                    onClick={async () => {
-                                        try {
-                                            const { lat, lng } = await getCurrentCoords();
-                                            openGoogleMaps(lat, lng);
-                                        } catch {
-                                            alert("위치 권한이 필요합니다.");
-                                        }
-                                    }}
-                                >
-                                    구글지도
-                                </button>
+                                {/* Removed redundant map buttons to save space */}
                             </div>
                         </div>
 
@@ -1635,6 +1724,44 @@ ${payload}`;
                                 })}
                             </div>
                         )}
+
+                        {/* AI 가상 시공 (New Section) */}
+                        <div className={styles.sectionTitle}>✨ AI 가상 시공 미리보기</div>
+                        <div style={{ marginBottom: 30, padding: "0 4px" }}>
+                            {sitePhotos.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (sitePhotos[0]?.url) {
+                                            setSiteImage(sitePhotos[0].url);
+                                            setShowPreviewModal(true);
+                                        }
+                                    }}
+                                    style={{
+                                        width: "100%", padding: "16px", borderRadius: "12px",
+                                        background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                                        color: "#fff", border: "none", fontWeight: "bold", fontSize: "1.1rem",
+                                        boxShadow: "0 4px 15px rgba(99, 102, 241, 0.4)",
+                                        cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px"
+                                    }}
+                                >
+                                    <span>🪄</span>
+                                    <span>가상 시공 실행하기 (AI)</span>
+                                </button>
+                            ) : (
+                                <div style={{
+                                    padding: "16px", background: "#f5f5f5", borderRadius: "12px",
+                                    color: "#aaa", textAlign: "center", fontSize: "0.95rem",
+                                    border: "1px dashed #ddd"
+                                }}>
+                                    👆 먼저 현장 사진을 첨부하면 활성화됩니다
+                                </div>
+                            )}
+                            <p style={{ fontSize: 13, color: "#666", marginTop: 10, textAlign: "center", lineHeight: "1.4" }}>
+                                현재 선택된 <b>{category} {detail}</b> 옵션으로<br />
+                                예상 시공 모습을 미리 확인해보세요.
+                            </p>
+                        </div>
 
                         {/* 비고 */}
                         <div className={styles.sectionTitle}>특이사항(오차 10mm↑이면 자동 문구 삽입)</div>

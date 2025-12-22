@@ -17,6 +17,7 @@ type AdminSettings = {
     measurerName: string;
     measurerPhone: string;
     openaiApiKey?: string;
+    businessCardImage?: string; // Base64 data URI
     // v2: List of objects
     referenceObjects?: ReferenceObject[];
 };
@@ -31,6 +32,7 @@ function safeParse(raw: string | null): Partial<AdminSettings> {
             measurerName: String(obj.measurerName ?? ""),
             measurerPhone: String(obj.measurerPhone ?? ""),
             openaiApiKey: String(obj.openaiApiKey ?? ""),
+            businessCardImage: String(obj.businessCardImage ?? ""),
             referenceObjects: Array.isArray(obj.referenceObjects) ? obj.referenceObjects : [],
         };
     } catch {
@@ -46,6 +48,7 @@ export default function AdminPage() {
     const [measurerName, setMeasurerName] = useState("");
     const [measurerPhone, setMeasurerPhone] = useState("");
     const [openaiApiKey, setOpenaiApiKey] = useState("");
+    const [businessCard, setBusinessCard] = useState("");
 
     // v2 Reference Objects
     const [refObjects, setRefObjects] = useState<ReferenceObject[]>([]);
@@ -63,6 +66,7 @@ export default function AdminPage() {
         setMeasurerName(parsed.measurerName ?? "");
         setMeasurerPhone(parsed.measurerPhone ?? "");
         setOpenaiApiKey(parsed.openaiApiKey ?? "");
+        setBusinessCard(parsed.businessCardImage ?? "");
 
         // Migration: If old single object exists but no list, add it to list
         if (raw) {
@@ -110,6 +114,81 @@ export default function AdminPage() {
         setRefObjects(refObjects.filter(o => o.id !== id));
     };
 
+    // ✨ 명함 생성 (간편 제작)
+    const generateBusinessCard = () => {
+        if (!measurerName || !measurerPhone) {
+            alert("먼저 실측자 이름과 연락처를 입력해주세요.");
+            return;
+        }
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // Card Size: 500x300 (Roughly credit card aspect ratio)
+        canvas.width = 500;
+        canvas.height = 300;
+
+        // Background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, 500, 300);
+
+        // Border
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#333333";
+        ctx.strokeRect(10, 10, 480, 280);
+
+        // Logo / Title
+        ctx.fillStyle = "#333333";
+        ctx.font = "bold 36px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("LIMS DOOR", 250, 80);
+
+        ctx.font = "16px sans-serif";
+        ctx.fillStyle = "#666666";
+        ctx.fillText("Premium Door Measurement", 250, 110);
+
+        // Divider
+        ctx.beginPath();
+        ctx.moveTo(100, 130);
+        ctx.lineTo(400, 130);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#dddddd";
+        ctx.stroke();
+
+        // Info
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#000000";
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillText(`실측담당: ${measurerName}`, 80, 180);
+
+        ctx.font = "20px sans-serif";
+        ctx.fillText(`Tel: ${measurerPhone}`, 80, 220);
+
+        if (officeEmail) {
+            ctx.font = "16px sans-serif";
+            ctx.fillStyle = "#555555";
+            ctx.fillText(officeEmail, 80, 250);
+        }
+
+        // Save
+        const dataUrl = canvas.toDataURL("image/png");
+        setBusinessCard(dataUrl);
+        alert("간편 명함이 생성되었습니다. 저장 버튼을 눌러 확정하세요.");
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            if (evt.target?.result) {
+                setBusinessCard(evt.target.result as string);
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
     const onSave = () => {
         const payload: AdminSettings = {
             officePhone: officePhone.trim(),
@@ -117,6 +196,7 @@ export default function AdminPage() {
             measurerName: measurerName.trim(),
             measurerPhone: measurerPhone.trim(),
             openaiApiKey: openaiApiKey.trim(),
+            businessCardImage: businessCard,
             referenceObjects: refObjects,
         };
 
