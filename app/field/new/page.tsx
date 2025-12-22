@@ -1228,20 +1228,25 @@ ${payload}`;
                                 🔊 음성 안내
                             </label>
 
-                            <button
-                                type="button"
-                                className={styles.buttonGhost}
-                                style={{ borderColor: "#3b82f6", color: "#3b82f6", cursor: "pointer" }}
-                                onClick={() => {
-                                    // Pass current door type options to AR page
-                                    const params = new URLSearchParams();
-                                    if (category) params.set("category", category);
-                                    if (detail) params.set("doorType", detail); // Fix: type -> detail
-                                    window.location.href = `/field/ar?${params.toString()}`;
-                                }}
-                            >
-                                📏 AR 실측(AI 측정)
-                            </button>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                                <button
+                                    type="button"
+                                    className={styles.buttonGhost}
+                                    style={{ borderColor: "#3b82f6", color: "#3b82f6", cursor: "pointer", width: "100%", justifyContent: "center" }}
+                                    onClick={() => {
+                                        // Pass current door type options to AR page
+                                        const params = new URLSearchParams();
+                                        if (category) params.set("category", category);
+                                        if (detail) params.set("doorType", detail);
+                                        window.location.href = `/field/ar?${params.toString()}`;
+                                    }}
+                                >
+                                    📏 AR 정밀 실측 (베타)
+                                </button>
+                                <p style={{ fontSize: 11, color: "#6b7280", marginTop: 4, lineHeight: 1.3 }}>
+                                    ※ 시공 위험 판단 보조용 (최종 치수는 레이저 기준)
+                                </p>
+                            </div>
                         </div>
                     </header>
 
@@ -1454,7 +1459,25 @@ ${payload}`;
                         )}
 
                         {/* Auto-fill from AR */}
-                        <AutoFillFromAR setW={setConfirmedWidth} setH={setConfirmedHeight} />
+                        <AutoFillFromAR
+                            setW={(val) => setWidthPoints(Array(req.wReq).fill(val))}
+                            setH={(val) => setHeightPoints(Array(req.hReq).fill(val))}
+                            setMemo={setSiteMemo}
+                        />
+
+                        {/* AI Modal */}
+                        <VirtualPreviewModal
+                            isOpen={showPreviewModal}
+                            onClose={() => setShowPreviewModal(false)}
+                            imageSrc={siteImage || ""}
+                            doorOptions={{
+                                category: category,
+                                type: detail,
+                                // Add more options if available in state
+                            }}
+                        />
+
+
 
                         {/* 레이저레벨 사진 */}
                         <div className={styles.sectionTitle}>실측 전 필수 사진 (레이저 레벨기 측정)</div>
@@ -1886,21 +1909,49 @@ ${payload}`;
 // ----------------------------------------------------------------------
 // Helper for AR Params
 // ----------------------------------------------------------------------
-function AutoFillFromAR({ setW, setH }: { setW: (v: string) => void; setH: (v: string) => void }) {
+function AutoFillFromAR({
+    setW, setH, setMemo
+}: {
+    setW: (v: string) => void;
+    setH: (v: string) => void;
+    setMemo: React.Dispatch<React.SetStateAction<string>>;
+}) {
     useEffect(() => {
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
+
         const w = params.get("width");
         const h = params.get("height");
+
+        // Risk Data
+        const riskLevel = params.get("riskLevel"); // NORMAL, WARNING, DANGER
+        const maxStepMm = params.get("maxStepMm");
+        const maxAngle = params.get("maxAngle");
+        const extraMat = params.get("extraMaterial") === "true";
+        const photoReq = params.get("photoRequired") === "true";
+
+        let msg = "";
+        if (riskLevel === "DANGER") {
+            msg += `[🚨AR 위험감지] 단차 ${maxStepMm}mm / 각도 ${maxAngle}° -> 사진첨부 필수/관리자 확인 요망\n`;
+        } else if (riskLevel === "WARNING") {
+            msg += `[⚠️AR 주의감지] 단차 ${maxStepMm}mm / 각도 ${maxAngle}° -> 추가자재 권장\n`;
+        }
+
         if (w && h) {
             setW(w);
             setH(h);
-            // Clean URL to prevent annoying reload-alert loop
+
+            if (msg) {
+                setMemo(prev => msg + prev);
+                alert(`AR 실측 데이터 적용됨!\n\n${msg}\n(가로:${w}, 세로:${h})`);
+            } else {
+                // Simple toast
+                const timer = setTimeout(() => alert(`AR 실측값 적용됨!\n(가로:${w}, 세로:${h})`), 300);
+            }
+
+            // Clean URL
             window.history.replaceState({}, "", window.location.pathname);
-            // Simple toast concept
-            const timer = setTimeout(() => alert(`AR 실측값 적용됨!\n(가로:${w}, 세로:${h})`), 300);
-            return () => clearTimeout(timer);
         }
-    }, [setW, setH]);
+    }, [setW, setH, setMemo]);
     return null;
 }

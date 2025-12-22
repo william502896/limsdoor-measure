@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useLeveling } from "../../lib/useLeveling";
+import { calcGap, calcVerticalError, evaluateRisk, THRESHOLD } from "../../lib/arUtils";
 
 // ==========================================
 // Types
@@ -16,7 +17,6 @@ type ReferenceObject = {
 type TemplateStep = {
     label: string;
     mode: "width" | "height";
-    // We can add specific instructions or guide images here later
 };
 
 type MeasureTemplate = {
@@ -24,7 +24,7 @@ type MeasureTemplate = {
     steps: TemplateStep[];
 };
 
-// Default: 1 Width, 1 Height
+// Default Templates
 const TEMPLATE_DEFAULT: MeasureTemplate = {
     name: "기본(1개소)",
     steps: [
@@ -32,8 +32,6 @@ const TEMPLATE_DEFAULT: MeasureTemplate = {
         { label: "세로(높이)", mode: "height" },
     ]
 };
-
-// Complex: 3 Widths, 3 Heights
 const TEMPLATE_COMPLEX: MeasureTemplate = {
     name: "정밀(3개소)",
     steps: [
@@ -54,7 +52,6 @@ export default function ArPage() {
     // ==========================================
     const [status, setStatus] = useState("초기화 중...");
     const [isArRunning, setIsArRunning] = useState(false);
-    const [isSupported, setIsSupported] = useState<boolean | null>(null);
 
     // Config
     const [doorType, setDoorType] = useState("");
@@ -70,21 +67,23 @@ export default function ArPage() {
     const [template, setTemplate] = useState<MeasureTemplate>(TEMPLATE_DEFAULT);
     const [stepIdx, setStepIdx] = useState(0);
 
-    // Data
+    // Data Store
     const [results, setResults] = useState<number[]>([]);
-    const [activePoints, setActivePoints] = useState<THREE.Mesh[]>([]); // Current pair (max 2)
+    const [activePoints, setActivePoints] = useState<THREE.Mesh[]>([]);
     const [calibPoints, setCalibPoints] = useState<THREE.Mesh[]>([]);
 
-    // Real-time
-    const [cameraDist, setCameraDist] = useState<number | null>(null);
-    const [isOptimal, setIsOptimal] = useState(false);
+    // v3: Precision Guide Data
+    const [referencePlane, setReferencePlane] = useState<{ point: THREE.Vector3, normal: THREE.Vector3 } | null>(null);
+    const [liveGap, setLiveGap] = useState(0); // mm
+    const [liveAngle, setLiveAngle] = useState(0); // deg (Vertical Error)
+    const [maxGapDetected, setMaxGapDetected] = useState(0);
+    const [maxAngleDetected, setMaxAngleDetected] = useState(0);
 
     // Leveling
     const [useLevelingAssist, setUseLevelingAssist] = useState(true);
-    const [strictLeveling, setStrictLeveling] = useState(false);
     const leveling = useLeveling(useLevelingAssist);
 
-    // ThreeJS
+    // ThreeJS Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -93,59 +92,31 @@ export default function ArPage() {
     const hitTestSourceRef = useRef<XRHitTestSource | null>(null);
     const reticleValidRef = useRef(false);
 
-    // ==========================================
-    // Init & Config Load
-    // ==========================================
+    // Load Settings
     useEffect(() => {
-        // WebXR Check
-        if ("xr" in navigator) {
-            (navigator as any).xr.isSessionSupported("immersive-ar").then((supported: boolean) => {
-                setIsSupported(supported);
-                if (!supported) setStatus("AR 미지원 기기");
-            });
-        } else {
-            setIsSupported(false);
-            setStatus("WebXR 미지원 브라우저");
-        }
-
-        // URL Params
         const params = new URLSearchParams(window.location.search);
         const dType = params.get("doorType") || "";
         setDoorType(dType);
 
-        // Template Logic
-        if (dType.includes("3연동") || dType.includes("3슬라이딩") || dType.includes("3채널")) {
+        if (dType.includes("3연동") || dType.includes("3슬라이딩")) {
             setTemplate(TEMPLATE_COMPLEX);
         } else {
             setTemplate(TEMPLATE_DEFAULT);
         }
 
-        // Load Admin Settings
         try {
             const raw = localStorage.getItem(STORAGE_KEY_ADMIN);
             if (raw) {
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed.referenceObjects)) {
                     setRefObjects(parsed.referenceObjects);
-                    // Default select first if exists
-                    if (parsed.referenceObjects.length > 0) {
-                        setSelectedRefId(parsed.referenceObjects[0].id);
-                    }
+                    if (parsed.referenceObjects.length > 0) setSelectedRefId(parsed.referenceObjects[0].id);
                 }
             }
-
-            // Load Toggles
-            const savedLevel = localStorage.getItem("lims_leveling_assist");
-            const savedStrict = localStorage.getItem("lims_leveling_strict");
-            if (savedLevel !== null) setUseLevelingAssist(savedLevel === "true");
-            if (savedStrict !== null) setStrictLeveling(savedStrict === "true");
-
         } catch { }
     }, []);
 
-    // ==========================================
-    // Three.js SCENE
-    // ==========================================
+    // Scene Setup
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -173,17 +144,21 @@ export default function ArPage() {
         scene.add(reticle);
         reticleRef.current = reticle;
 
-        // Reticle Visuals
+        // Reticle Visuals (v3: Enhanced with Normal Indicator)
+        // 1. Ring
         const ring = new THREE.Mesh(
             new THREE.RingGeometry(0.04, 0.05, 32).rotateX(-Math.PI / 2),
-            new THREE.MeshBasicMaterial({ color: 0x00ffff })
+            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
         );
         reticle.add(ring);
-        const dot = new THREE.Mesh(
-            new THREE.CircleGeometry(0.005, 32).rotateX(-Math.PI / 2),
-            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+
+        // 2. Normal Stick (Upwards from ring)
+        const stick = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.002, 0.002, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
         );
-        reticle.add(dot);
+        stick.position.y = 0.05;
+        reticle.add(stick);
 
         // Render Loop
         renderer.setAnimationLoop((time, frame) => {
@@ -191,7 +166,6 @@ export default function ArPage() {
             const session = renderer.xr.getSession();
             if (!session) return;
 
-            // Hit Test
             if (!hitTestSourceRef.current) {
                 session.requestReferenceSpace("viewer")?.then((refSpace) => {
                     session.requestHitTestSource?.({ space: refSpace })?.then((source) => {
@@ -203,27 +177,34 @@ export default function ArPage() {
             if (hitTestSourceRef.current) {
                 const refSpace = renderer.xr.getReferenceSpace();
                 if (refSpace) {
-                    const results = frame.getHitTestResults(hitTestSourceRef.current);
-                    if (results.length > 0) {
-                        const hit = results[0];
+                    const hitResults = frame.getHitTestResults(hitTestSourceRef.current);
+                    if (hitResults.length > 0) {
+                        const hit = hitResults[0];
                         const pose = hit.getPose(refSpace);
                         if (pose) {
                             reticle.visible = true;
                             reticle.matrix.fromArray(pose.transform.matrix);
                             reticleValidRef.current = true;
 
-                            // Distance
-                            const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-                            const retPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-                            const dist = camPos.distanceTo(retPos);
+                            // v3: Real-time Calculations
+                            const pos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+                            // Extract Normal (Y axis of reticle matrix in WebXR hit test usually aligns with surface normal)
+                            const normal = new THREE.Vector3();
+                            reticle.matrix.extractBasis(new THREE.Vector3(), normal, new THREE.Vector3());
 
-                            // UI Update
-                            updateDistanceUI(dist);
+                            // 1. Angle Calc
+                            const vError = calcVerticalError(normal);
+                            setLiveAngle(vError);
+                            if (vError > maxAngleDetected) setMaxAngleDetected(vError);
+
+                            // 2. Gap Calc (if reference exists)
+                            // We need access to the CURRENT referencePlane state (tricky in loop)
+                            // Using a ref for performance/access might be better but let's try closure if state updates fast enough? 
+                            // Actually, state inside render loop is stale. Need a Ref for referencePlane.
                         }
                     } else {
                         reticle.visible = false;
                         reticleValidRef.current = false;
-                        setCameraDist(null);
                     }
                 }
             }
@@ -241,22 +222,74 @@ export default function ArPage() {
             if (rendererRef.current) rendererRef.current.setAnimationLoop(null);
             window.removeEventListener("resize", onResize);
         };
+    }, []); // Empty deps, so state access inside loop is blocked. Fixed below via Ref.
+
+    // State Ref for loop access
+    const refPlaneRef = useRef<{ point: THREE.Vector3, normal: THREE.Vector3 } | null>(null);
+    const maxValsRef = useRef({ gap: 0, angle: 0 });
+
+    // Update Refs when state changes (for UI consistency if needed, though loop drives logic)
+    useEffect(() => {
+        refPlaneRef.current = referencePlane;
+    }, [referencePlane]);
+
+    // Enhanced Loop Logic (Ref Based)
+    useEffect(() => {
+        if (!rendererRef.current) return;
+        const renderer = rendererRef.current;
+
+        renderer.setAnimationLoop((time, frame) => {
+            if (!frame) return;
+            const scene = sceneRef.current;
+            const camera = cameraRef.current;
+            if (!scene || !camera) return;
+
+            const session = renderer.xr.getSession();
+            if (hitTestSourceRef.current && session) {
+                const refSpace = renderer.xr.getReferenceSpace();
+                if (refSpace) {
+                    const results = frame.getHitTestResults(hitTestSourceRef.current);
+                    if (results.length > 0) {
+                        const hit = results[0];
+                        const pose = hit.getPose(refSpace);
+                        if (pose) {
+                            reticleRef.current!.visible = true;
+                            reticleRef.current!.matrix.fromArray(pose.transform.matrix);
+                            reticleValidRef.current = true;
+
+                            // -- Calc --
+                            const mat = reticleRef.current!.matrix;
+                            const pos = new THREE.Vector3().setFromMatrixPosition(mat);
+                            const normal = new THREE.Vector3();
+                            mat.extractBasis(new THREE.Vector3(), normal, new THREE.Vector3());
+
+                            // Angle
+                            const ang = calcVerticalError(normal);
+                            setLiveAngle(ang);
+                            if (ang > maxValsRef.current.angle) {
+                                maxValsRef.current.angle = ang;
+                                setMaxAngleDetected(ang);
+                            }
+
+                            // Gap
+                            if (refPlaneRef.current) {
+                                const gap = calcGap(pos, refPlaneRef.current.normal, refPlaneRef.current.point);
+                                setLiveGap(gap);
+                                if (gap > maxValsRef.current.gap) {
+                                    maxValsRef.current.gap = gap;
+                                    setMaxGapDetected(gap);
+                                }
+                            }
+                        }
+                    } else {
+                        reticleRef.current!.visible = false;
+                        reticleValidRef.current = false;
+                    }
+                }
+            }
+            renderer.render(scene, camera);
+        });
     }, []);
-
-    const updateDistanceUI = (distM: number) => {
-        const cm = Math.round(distM * 100);
-        setCameraDist(cm);
-        const opt = distM >= 0.5 && distM <= 1.5; // Optimal: 50~150cm
-        setIsOptimal(opt);
-
-        // Update Reticle Color
-        if (reticleRef.current) {
-            const hex = opt ? 0x00ff00 : 0xff3333; // Green or Red
-            reticleRef.current.children.forEach((c: any) => {
-                if (c.material) c.material.color.setHex(hex);
-            });
-        }
-    };
 
 
     // ==========================================
@@ -265,7 +298,7 @@ export default function ArPage() {
     const startAR = async () => {
         if (!navigator.xr) return alert("WebXR 미지원");
 
-        // Permission Check (Leveling)
+        // Permission
         if (useLevelingAssist && !leveling.permissionGranted) {
             await leveling.requestPermission();
         }
@@ -273,7 +306,7 @@ export default function ArPage() {
         try {
             const session = await (navigator as any).xr.requestSession("immersive-ar", {
                 requiredFeatures: ["hit-test"],
-                optionalFeatures: ["dom-overlay"],
+                optionalFeatures: ["dom-overlay", "plane-detection"], // Request Plane Detection
                 domOverlay: { root: document.body }
             });
 
@@ -282,36 +315,28 @@ export default function ArPage() {
                 rendererRef.current.xr.setSession(session);
             }
 
-            session.addEventListener("end", () => {
-                setIsArRunning(false);
-                hitTestSourceRef.current = null;
-            });
-
+            session.addEventListener("end", () => setIsArRunning(false));
             setIsArRunning(true);
+
+            // Reset Data
             setResults([]);
             setCalibPoints([]);
             setActivePoints([]);
             setStepIdx(0);
+            setReferencePlane(null);
+            setMaxGapDetected(0);
+            setMaxAngleDetected(0);
+            maxValsRef.current = { gap: 0, angle: 0 };
 
-            // Determine Start Mode
             if (selectedRefId) {
                 const refObj = refObjects.find(r => r.id === selectedRefId);
-                if (refObj) {
-                    setMode("calibration");
-                    setStatus(`[보정] ${refObj.name}의 한쪽 끝을 찍으세요.`);
-                } else {
-                    setMode("measurement");
-                    setStatus(template.steps[0].label + " 측정 대기");
-                }
+                setMode("calibration");
+                setStatus(refObj ? `[보정] ${refObj.name} 측정` : "측정 대기");
             } else {
                 setMode("measurement");
-                setStatus(template.steps[0].label + " 측정 대기");
-                setIsCalibrated(false);
-                setScaleFactor(1.0);
+                setStatus("첫 번째 지점(기준)을 찍으세요");
             }
-
         } catch (e) {
-            console.error(e);
             alert("AR 세션 시작 실패");
         }
     };
@@ -319,15 +344,12 @@ export default function ArPage() {
     const onCapture = () => {
         if (!reticleValidRef.current || !sceneRef.current) return;
 
-        // Strict Leveling Check
-        if (useLevelingAssist && strictLeveling && !leveling.isLevel) {
-            alert(`⚠️ 수평/수직을 맞춰주세요! (현재 ${leveling.gamma.toFixed(1)}°)`);
-            return;
-        }
+        const mat = reticleRef.current!.matrix;
+        const pos = new THREE.Vector3().setFromMatrixPosition(mat);
+        const normal = new THREE.Vector3();
+        mat.extractBasis(new THREE.Vector3(), normal, new THREE.Vector3());
 
-        const pos = new THREE.Vector3().setFromMatrixPosition(reticleRef.current!.matrix);
-
-        // Add visual Marker
+        // Visual Marker
         const mesh = new THREE.Mesh(
             new THREE.SphereGeometry(0.015),
             new THREE.MeshBasicMaterial({ color: 0xffff00 })
@@ -335,38 +357,40 @@ export default function ArPage() {
         mesh.position.copy(pos);
         sceneRef.current.add(mesh);
 
-        // Logic
-        if (mode === 'calibration') handleCalibration(mesh);
-        else if (mode === 'measurement') handleMeasurement(mesh);
+        if (mode === 'calibration') {
+            handleCalibration(mesh);
+        } else if (mode === 'measurement') {
+            // v3: Set Reference Plane on First Point of each pair? 
+            // Or Global Reference?
+            // "Guide System" implies detecting wall flatness. 
+            // Let's set Reference Plane on the VERY FIRST point (Measurement start).
+            if (!referencePlane) {
+                // First point becomes Reference
+                setReferencePlane({ point: pos, normal: normal });
+                setStatus("기준면 설정됨. 이제 단차를 확인하며 측정하세요.");
+            }
+
+            handleMeasurement(mesh);
+        }
     };
 
     const handleCalibration = (mesh: THREE.Mesh) => {
         const next = [...calibPoints, mesh];
         setCalibPoints(next);
 
-        if (next.length === 1) {
-            setStatus("반대쪽 끝을 찍으세요.");
-        } else if (next.length === 2) {
-            // Draw Line
-            drawLine(next[0].position, next[1].position, 0xff00ff);
-
-            // Calc Factor
+        if (next.length === 2) {
+            // ... Calibration Logic (Same as before) ...
             const measuredM = next[0].position.distanceTo(next[1].position);
             const refObj = refObjects.find(r => r.id === selectedRefId);
             if (refObj) {
                 const factor = refObj.sizeMm / (measuredM * 1000);
                 setScaleFactor(factor);
-                setIsCalibrated(true);
-                alert(`보정 완료! (계수: ${factor.toFixed(3)})\n이제 실측을 시작합니다.`);
+                alert(`보정 완료! 계수: ${factor.toFixed(3)}`);
             }
-
-            // Cleanup visuals
             next.forEach(m => m.visible = false);
             setCalibPoints([]);
-
-            // Next
             setMode("measurement");
-            setStatus(`${template.steps[0].label} 측정 시작`);
+            setStatus("측정 시작 (기준면 설정 대기)");
         }
     };
 
@@ -374,27 +398,23 @@ export default function ArPage() {
         const next = [...activePoints, mesh];
         setActivePoints(next);
 
-        if (next.length === 1) {
-            setStatus("반대쪽을 찍으세요.");
-        } else if (next.length === 2) {
+        if (next.length === 2) {
+            // Line
             drawLine(next[0].position, next[1].position, 0xffff00);
 
             const rawM = next[0].position.distanceTo(next[1].position);
             const valMm = Math.round(rawM * 1000 * scaleFactor);
 
-            // Save result
-            const newRes = [...results, valMm];
-            setResults(newRes);
+            setResults([...results, valMm]);
             setActivePoints([]);
 
-            // Next Step
             const nextIdx = stepIdx + 1;
             if (nextIdx < template.steps.length) {
                 setStepIdx(nextIdx);
                 setStatus(`[${valMm}mm] 다음: ${template.steps[nextIdx].label}`);
             } else {
                 setMode("complete");
-                setStatus("모든 측정 완료! 확정 버튼을 누르세요.");
+                setStatus("측정 완료. 결과 확인 후 전송하세요.");
             }
         }
     };
@@ -407,25 +427,34 @@ export default function ArPage() {
         sceneRef.current?.add(line);
     };
 
-    // Finalize
     const onConfirm = () => {
         // Aggregate
         const widths = results.filter((_, i) => template.steps[i].mode === 'width');
         const heights = results.filter((_, i) => template.steps[i].mode === 'height');
-
         const avgW = widths.length ? Math.round(widths.reduce((a, b) => a + b, 0) / widths.length) : 0;
         const avgH = heights.length ? Math.round(heights.reduce((a, b) => a + b, 0) / heights.length) : 0;
 
+        // v3 Risk Assessment
+        const risk = evaluateRisk(maxGapDetected, maxAngleDetected);
+
         const params = new URLSearchParams();
-        if (avgW) params.set("width", String(avgW));
-        if (avgH) params.set("height", String(avgH));
+        params.set("width", String(avgW));
+        params.set("height", String(avgH));
+        // Pass Risk Data
+        params.set("riskLevel", risk.riskLevel);
+        params.set("maxStepMm", String(risk.maxStepMm));
+        params.set("maxAngle", String(risk.maxAngle));
+        params.set("extraMaterial", String(risk.extraMaterialRecommended));
+        params.set("photoRequired", String(risk.photoRequired));
 
-        // Copy details
-        const details = template.steps.map((s, i) => `${s.label}: ${results[i]}mm`).join("\n");
-        navigator.clipboard.writeText(details); // Auto copy
-
-        alert(`입력 화면으로 이동합니다.\n가로: ${avgW}, 세로: ${avgH}`);
         window.location.href = `/field/new?${params.toString()}`;
+    };
+
+    // UI Helpers
+    const getRiskColor = (val: number, warn: number, danger: number) => {
+        if (val >= danger) return "red";
+        if (val >= warn) return "yellow";
+        return "lime";
     };
 
     return (
@@ -435,123 +464,80 @@ export default function ArPage() {
             {/* START SCREEN */}
             {!isArRunning && (
                 <div style={overlayStyle}>
-                    <h1>📏 AR 정밀 실측 (v2)</h1>
-                    <p style={{ opacity: 0.8 }}>{doorType || "기본"}</p>
+                    <h1>📐 AR 정밀 실측 가이드 (v3)</h1>
+                    <button onClick={startAR} style={bigBtnStyle}>측정 시작</button>
 
-                    {/* Ref Object Selector */}
-                    <div style={{ margin: "20px 0", width: "80%", maxWidth: 300 }}>
-                        <label style={{ display: "block", marginBottom: 8, fontSize: 14 }}>기준 물체 보정 (선택)</label>
-                        <select
-                            value={selectedRefId}
-                            onChange={e => setSelectedRefId(e.target.value)}
-                            style={{ width: "100%", padding: 10, borderRadius: 8, background: "#333", color: "#fff", border: "1px solid #555" }}
-                        >
-                            <option value="">(보정 안함)</option>
-                            {refObjects.map(obj => (
-                                <option key={obj.id} value={obj.id}>{obj.name} ({obj.sizeMm}mm)</option>
-                            ))}
-                        </select>
-                        <p style={{ fontSize: 12, color: "#aaa", marginTop: 6 }}>
-                            * 보정 시 오차를 크게 줄일 수 있습니다.
-                        </p>
+                    <div style={{ marginTop: 20, textAlign: "left", fontSize: 13, color: "#ccc" }}>
+                        <p>✅ <b>녹색/네온 가이드</b>: 측정 면 표시</p>
+                        <p>✅ <b>실시간 오차</b>: 수직/수평/단차 감지</p>
+                        <p>🚨 <b>자동 경고</b>: 5mm/1.5° 이상 시 경고</p>
                     </div>
-
-                    {/* Leveling Toggles */}
-                    <div style={{ background: "rgba(255,255,255,0.1)", padding: 15, borderRadius: 10, width: "80%", maxWidth: 300, textAlign: "left" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                            <input type="checkbox" checked={useLevelingAssist} onChange={e => {
-                                setUseLevelingAssist(e.target.checked);
-                                localStorage.setItem("lims_leveling_assist", String(e.target.checked));
-                            }} />
-                            수평/수직 가이드 켜기
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, opacity: useLevelingAssist ? 1 : 0.5 }}>
-                            <input type="checkbox" checked={strictLeveling} onChange={e => {
-                                setStrictLeveling(e.target.checked);
-                                localStorage.setItem("lims_leveling_strict", String(e.target.checked));
-                            }} disabled={!useLevelingAssist} />
-                            정렬 OK일 때만 촬영 (Strict)
-                        </label>
-                    </div>
-
-                    <button onClick={startAR} style={bigBtnStyle}>
-                        측정 시작
-                    </button>
-                    <button onClick={() => window.location.href = "/field/new"} style={{ background: "transparent", border: "none", color: "#aaa", marginTop: 20 }}>
-                        돌아가기
-                    </button>
                 </div>
             )}
 
-            {/* RUNNING HUD */}
+            {/* HUD */}
             {isArRunning && (
                 <>
-                    {/* Top Bar */}
-                    <div style={{ position: "absolute", top: 20, left: 20, right: 20, display: "flex", justifyContent: "space-between", pointerEvents: "none" }}>
-                        {/* Step Info */}
+                    {/* Top Right: Real-time Info */}
+                    <div style={{ position: "absolute", top: 20, right: 20, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                        {/* Angle */}
                         <div style={hudBox}>
-                            <div style={{ fontSize: 12, color: "#ccc" }}>
-                                {mode === 'calibration' ? "보정 중" : `STEP ${stepIdx + 1}/${template.steps.length}`}
-                            </div>
-                            <div style={{ fontWeight: "bold", fontSize: 16, color: "yellow" }}>
-                                {mode === 'calibration' ? "기준 물체 찍기" : template.steps[stepIdx]?.label}
-                            </div>
+                            <span style={{ fontSize: 10, color: "#aaa" }}>수직오차</span><br />
+                            <span style={{ fontSize: 18, fontWeight: "bold", color: getRiskColor(liveAngle, THRESHOLD.ANGLE_WARNING_DEG, THRESHOLD.ANGLE_DANGER_DEG) }}>
+                                {liveAngle.toFixed(1)}°
+                            </span>
                         </div>
-
-                        {/* Distance / Level */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-                            {cameraDist !== null && (
-                                <div style={{ ...hudBox, borderColor: isOptimal ? "lime" : "red", borderWidth: 1, borderStyle: "solid" }}>
-                                    {cameraDist}cm {isOptimal ? "✅" : "⚠️"}
-                                </div>
-                            )}
-                            {useLevelingAssist && (
-                                <div style={{ ...hudBox, borderColor: leveling.status === 'ok' ? "lime" : "red", borderWidth: 1, borderStyle: "solid" }}>
-                                    {leveling.status === 'ok' ? "Level OK" : "Tilted"} ({leveling.gamma.toFixed(1)}°)
-                                </div>
-                            )}
+                        {/* Gap */}
+                        <div style={hudBox}>
+                            <span style={{ fontSize: 10, color: "#aaa" }}>단차(Gap)</span><br />
+                            <span style={{ fontSize: 18, fontWeight: "bold", color: getRiskColor(liveGap, THRESHOLD.GAP_WARNING_MM, THRESHOLD.GAP_DANGER_MM) }}>
+                                {liveGap.toFixed(1)}mm
+                            </span>
                         </div>
                     </div>
 
-                    {/* Results List */}
-                    <div style={{ position: "absolute", top: 120, left: 20, pointerEvents: "none" }}>
-                        {results.map((val, i) => (
-                            <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", textShadow: "0 1px 2px #000" }}>
-                                {template.steps[i].label}: <span style={{ color: "yellow", fontWeight: "bold" }}>{val}mm</span>
+                    {/* Top Left: Step Info */}
+                    <div style={{ position: "absolute", top: 20, left: 20 }}>
+                        <div style={hudBox}>
+                            <div style={{ fontSize: 12, color: "#aaa" }}>{mode}</div>
+                            <div style={{ fontSize: 16, fontWeight: "bold", color: "#fff" }}>
+                                {template.steps[stepIdx]?.label || "완료"}
                             </div>
-                        ))}
+                        </div>
                     </div>
 
-                    {/* Center Message */}
-                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -150%)", pointerEvents: "none", textShadow: "0 1px 4px #000", textAlign: "center", width: "80%" }}>
-                        {status}
-                    </div>
+                    {/* Center Warning Message */}
+                    {(liveGap >= THRESHOLD.GAP_WARNING_MM || liveAngle >= THRESHOLD.ANGLE_WARNING_DEG) && (
+                        <div style={{
+                            position: "absolute", top: "20%", left: "50%", transform: "translateX(-50%)",
+                            background: liveGap >= THRESHOLD.GAP_DANGER_MM ? "rgba(255,0,0,0.8)" : "rgba(255,200,0,0.8)",
+                            padding: "10px 20px", borderRadius: 20, fontWeight: "bold", color: "#fff",
+                            animation: liveGap >= THRESHOLD.GAP_DANGER_MM ? "blink 1s infinite" : "none"
+                        }}>
+                            {liveGap >= THRESHOLD.GAP_DANGER_MM ? "🚨 위험: 오차 큼 (사진필수)" : "⚠️ 주의: 추가자재 권장"}
+                        </div>
+                    )}
 
                     {/* Bottom Controls */}
-                    <div style={{ position: "absolute", bottom: 40, left: 0, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 20, pointerEvents: "auto" }}>
+                    <div style={{ position: "absolute", bottom: 40, left: 0, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+                        <div style={{ textShadow: "0 1px 2px #000" }}>{status}</div>
 
-                        {/* Capture Button */}
                         {mode !== 'complete' && (
-                            <button onClick={onCapture} style={{
-                                width: 80, height: 80, borderRadius: "50%",
-                                background: (useLevelingAssist && strictLeveling && !leveling.isLevel) ? "rgba(255,0,0,0.3)" : "rgba(255,255,255,0.2)",
-                                border: "4px solid #fff", zIndex: 20
-                            }}>
-                                <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#fff", margin: "6px auto" }} />
-                            </button>
+                            <button onClick={onCapture} style={captureBtnStyle} />
                         )}
 
-                        <div style={{ display: "flex", gap: 20 }}>
-                            <button onClick={() => window.location.reload()} style={subBtn}>재시작</button>
-                            {mode === 'complete' && (
-                                <button onClick={onConfirm} style={{ ...subBtn, background: "#2b5cff", border: "none" }}>
-                                    확정 및 입력
-                                </button>
-                            )}
-                        </div>
+                        {mode === 'complete' && (
+                            <button onClick={onConfirm} style={confirmBtnStyle}>
+                                결과 확정 및 전송
+                            </button>
+                        )}
                     </div>
                 </>
             )}
+
+            <style jsx>{`
+                @keyframes blink { 50% { opacity: 0.5; } }
+             `}</style>
         </div>
     );
 }
@@ -560,17 +546,23 @@ const overlayStyle: React.CSSProperties = {
     position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", color: "#fff",
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 100
 };
-
 const bigBtnStyle: React.CSSProperties = {
-    marginTop: 30, padding: "16px 40px", fontSize: 20, fontWeight: "bold",
-    borderRadius: 30, border: "none", background: "#2b5cff", color: "#fff",
+    padding: "16px 40px", fontSize: 20, fontWeight: "bold", borderRadius: 30,
+    border: "none", background: "#2b5cff", color: "#fff", cursor: "pointer"
+};
+const hudBox: React.CSSProperties = {
+    background: "rgba(0,0,0,0.6)", padding: "8px 12px", borderRadius: 8,
+    color: "#fff", textAlign: "right", backdropFilter: "blur(4px)"
+};
+const captureBtnStyle: React.CSSProperties = {
+    width: 80, height: 80, borderRadius: "50%",
+    background: "rgba(255,255,255,0.2)", border: "4px solid #fff",
     cursor: "pointer"
 };
-
-const hudBox: React.CSSProperties = {
-    background: "rgba(0,0,0,0.6)", padding: "8px 12px", borderRadius: 8, color: "#fff"
+const confirmBtnStyle: React.CSSProperties = {
+    padding: "12px 24px", borderRadius: 24, background: "#2b5cff",
+    color: "#fff", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold"
 };
 
-const subBtn: React.CSSProperties = {
-    padding: "12px 24px", borderRadius: 24, background: "#333", color: "#fff", border: "1px solid #555", cursor: "pointer"
-};
+
+
