@@ -221,7 +221,7 @@ async function createCustomerPdf(payload: MeasurementPayload) {
     pdfDoc.registerFontkit(fontkit);
 
     // 폰트 로드(로컬)
-    const fontPath = path.join(process.cwd(), "assets", "fonts", "Pretendard-Regular.otf");
+    const fontPath = path.join(process.cwd(), "assets", "fonts", "Pretendard-Regular.ttf");
     const fontBytes = new Uint8Array(fs.readFileSync(fontPath));
     assertBytes("Font", fontBytes);
 
