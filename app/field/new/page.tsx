@@ -1236,7 +1236,7 @@ ${payload}`;
                                     // Pass current door type options to AR page
                                     const params = new URLSearchParams();
                                     if (category) params.set("category", category);
-                                    if (type) params.set("doorType", type);
+                                    if (detail) params.set("doorType", detail); // Fix: type -> detail
                                     window.location.href = `/field/ar?${params.toString()}`;
                                 }}
                             >
@@ -1881,4 +1881,26 @@ ${payload}`;
             </main>
         </>
     );
+}
+
+// ----------------------------------------------------------------------
+// Helper for AR Params
+// ----------------------------------------------------------------------
+function AutoFillFromAR({ setW, setH }: { setW: (v: string) => void; setH: (v: string) => void }) {
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const w = params.get("width");
+        const h = params.get("height");
+        if (w && h) {
+            setW(w);
+            setH(h);
+            // Clean URL to prevent annoying reload-alert loop
+            window.history.replaceState({}, "", window.location.pathname);
+            // Simple toast concept
+            const timer = setTimeout(() => alert(`AR 실측값 적용됨!\n(가로:${w}, 세로:${h})`), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [setW, setH]);
+    return null;
 }
