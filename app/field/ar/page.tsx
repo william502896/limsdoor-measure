@@ -15,6 +15,7 @@ export default function ArPage() {
     const [status, setStatus] = useState("AR 시작 버튼을 눌러주세요");
     const [isIOS, setIsIOS] = useState(false);
     const [isSupported, setIsSupported] = useState<boolean | null>(null);
+    const [isArRunning, setIsArRunning] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -240,6 +241,13 @@ export default function ArPage() {
             rendererRef.current.xr.setSession(session);
 
             setStatus("바닥이나 벽을 천천히 비춰주세요...");
+            setIsArRunning(true);
+
+            session.addEventListener("end", () => {
+                setStatus("AR 세션이 종료되었습니다.");
+                setIsArRunning(false);
+                // window.location.reload(); // Simple reset
+            });
 
         } catch (e) {
             console.error(e);
@@ -248,7 +256,7 @@ export default function ArPage() {
     };
 
     return (
-        <div style={{ width: "100%", height: "100vh", position: "relative", background: "#000", overflow: "hidden" }}>
+        <div style={{ width: "100%", height: "100vh", position: "relative", background: isArRunning ? "transparent" : "#000", overflow: "hidden" }}>
             <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
             {/* UI Overlay */}
