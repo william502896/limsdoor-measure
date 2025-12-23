@@ -1,0 +1,2 @@
+﻿app/field/new/page.tsx(1656,231): error TS2322: Type '{ isOpen: boolean; onClose: () => void; imageSrc: string; doorOptions: { category: DoorCategory; type: string; glass: string; color: string; }; apiKey: string; }' is not assignable to type 'IntrinsicAttributes & VirtualPreviewModalProps'.
+  Property 'apiKey' does not exist on type 'IntrinsicAttributes & VirtualPreviewModalProps'.

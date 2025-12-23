@@ -6,15 +6,12 @@ import ManageLayout from "../components/Manage/Layout/ManageLayout";
 import CustomerList from "@/app/components/Manage/CustomerList";
 import CustomerDetail from "@/app/components/Manage/CustomerDetail";
 import AnalyticsDashboard from "@/app/components/Manage/AnalyticsDashboard";
-import { useGlobalStore } from "@/app/lib/store-context"; // NEW IMPORT
 
-function AdminContent() {
+function ManageContent() {
     const searchParams = useSearchParams();
     const initialView = searchParams.get("view") || "dashboard";
     const [view, setView] = useState(initialView);
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-
-    const { user, tenants, currentTenant, switchTenant } = useGlobalStore(); // NEW HOOK
 
     useEffect(() => {
         const v = searchParams.get("view");
@@ -24,7 +21,7 @@ function AdminContent() {
     // Dynamic Title based on view
     const getTitle = () => {
         switch (view) {
-            case "dashboard": return "통합 대시보드 (Admin)";
+            case "dashboard": return "대시보드";
             case "customer": return "고객 관리";
             case "contract": return "계약 / 견적 관리";
             case "as": return "AS / 하자 관리";
@@ -42,29 +39,6 @@ function AdminContent() {
 
     return (
         <ManageLayout title={getTitle()}>
-            {/* Tenant Switcher */}
-            <div className="mb-6 flex items-center gap-4 bg-white/80 backdrop-blur p-4 rounded-2xl border border-white/40 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <span className="bg-indigo-600 text-white p-1.5 rounded-lg text-xs font-bold">🏢 지점</span>
-                    <span className="font-bold text-gray-700 text-sm">현재 접속중:</span>
-                </div>
-                <select
-                    className="border border-gray-200 p-2 rounded-lg text-sm bg-white hover:border-indigo-300 focus:outline-indigo-500 transition-colors cursor-pointer"
-                    value={currentTenant?.id}
-                    onChange={(e) => switchTenant(e.target.value)}
-                >
-                    {tenants.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                </select>
-                <div className="hidden md:flex ml-auto text-xs text-gray-500 gap-2">
-                    <span>👤 {user?.name}</span>
-                    <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-600 border border-gray-200">
-                        {user?.roles[currentTenant?.id || ""] || "GUEST"}
-                    </span>
-                </div>
-            </div>
-
             {view === "dashboard" && <AnalyticsDashboard />}
 
             {view === "customer" && (
@@ -84,18 +58,18 @@ function AdminContent() {
             {["contract", "as", "voice", "reports", "settings"].includes(view) && (
                 <div className="flex flex-col items-center justify-center h-96 text-slate-400">
                     <div className="text-4xl mb-4">🚧</div>
-                    <div className="text-lg font-medium">관리자 기능 준비 중</div>
-                    <div className="text-sm">({view} module)</div>
+                    <div className="text-lg font-medium">아직 준비 중인 기능입니다.</div>
+                    <div className="text-sm">({view} page functionality coming soon)</div>
                 </div>
             )}
         </ManageLayout>
     );
 }
 
-export default function AdminPage() {
+export default function ManagePage() {
     return (
-        <Suspense fallback={<div>Loading Admin...</div>}>
-            <AdminContent />
+        <Suspense fallback={<div>Loading...</div>}>
+            <ManageContent />
         </Suspense>
     );
 }

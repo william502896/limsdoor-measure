@@ -1,0 +1,22 @@
+
+> limsdoor-measure@0.1.0 build
+> next build
+
+   ▲ Next.js 16.0.10 (Turbopack)
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2.2min
+   Running TypeScript ...
+Failed to compile.
+
+./app/field/new/page.tsx:1623:68
+Type error: 'wStats.spread' is possibly 'null'.
+
+[0m [90m 1621 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m{styles[33m.[39msummaryRow}[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39mbadge}[33m>[39m확정 가로[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39msummaryValue}[33m>[39m{confirmedWidth [33m?[39m[33m?[39m [32m"-"[39m}mm[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1622 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m{styles[33m.[39msummaryRow}[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39mbadge}[33m>[39m확정 세로[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39msummaryValue}[33m>[39m{confirmedHeight [33m?[39m[33m?[39m [32m"-"[39m}mm[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+[31m[1m>[22m[39m[90m 1623 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m{styles[33m.[39msummaryRow} style[33m=[39m{{ color[33m:[39m wStats[33m.[39mspread [33m>=[39m [35m5[39m [33m?[39m [32m"tomato"[39m [33m:[39m [32m"inherit"[39m }}[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39mbadge}[33m>[39m가로 오차[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33mspan[39m[33m>[39m{wStats[33m.[39mspread}mm[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m      |[39m                                                                    [31m[1m^[22m[39m
+ [90m 1624 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m{styles[33m.[39msummaryRow} style[33m=[39m{{ color[33m:[39m hStats[33m.[39mspread [33m>=[39m [35m5[39m [33m?[39m [32m"tomato"[39m [33m:[39m [32m"inherit"[39m }}[33m>[39m[33m<[39m[33mspan[39m className[33m=[39m{styles[33m.[39mbadge}[33m>[39m세로 오차[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33mspan[39m[33m>[39m{hStats[33m.[39mspread}mm[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1625 |[39m                 {shouldRecommendExtraMaterial [33m&&[39m [33m<[39m[33mdiv[39m className[33m=[39m{styles[33m.[39msummaryRow} style[33m=[39m{{ gridColumn[33m:[39m [32m"1/-1"[39m[33m,[39m color[33m:[39m [32m"orange"[39m[33m,[39m fontWeight[33m:[39m [32m"bold"[39m }}[33m>[39m⚠️ {shouldRequirePhoto [33m?[39m [32m"10mm 이상 (사진필수)"[39m [33m:[39m [32m"5mm 이상 (추가자재 권장)"[39m}[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m}
+ [90m 1626 |[39m             [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+Next.js build worker exited with code: 1 and signal: null

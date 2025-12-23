@@ -8,6 +8,13 @@ const BUILD_INFO = {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 import VirtualPreviewModal from "../../components/VirtualPreviewModal";
+import { useAudioRecorder } from "../../hooks/useAudioRecorder";
+import RecordingWidget from "../../components/FieldCoach/RecordingWidget";
+import Timeline, { TimelineEvent, SentimentSegment } from "../../components/FieldCoach/Timeline";
+import CoachingReport, { CoachingData } from "../../components/FieldCoach/CoachingReport";
+import { OrderStatus } from "@/app/lib/store";
+import { useGlobalStore } from "@/app/lib/store-context";
+import { useRouter } from "next/navigation";
 
 const STORAGE_KEY = "limsdoor_admin_settings_v1";
 
@@ -37,6 +44,7 @@ type AdminSettings = {
     measurerName: string;
     measurerPhone: string;
     openaiApiKey?: string;
+    businessCardImage?: string;
 };
 
 type Preview = {
@@ -390,6 +398,7 @@ type Estimate = {
 
     extraMaterials?: string[];
     note?: string;
+    totalPrice?: number; // Compatibility
 };
 
 function calcEstimate(args: {
@@ -605,6 +614,68 @@ export default function FieldNewPage() {
     // AI Virtual Preview Modal State (Must exist)
     const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+    // =============================================================
+    // AI FIELD COACHING Logic
+    // =============================================================
+    const recorder = useAudioRecorder();
+    const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+    const [sentimentSegments, setSentimentSegments] = useState<SentimentSegment[]>([]);
+    const [coachingData, setCoachingData] = useState<CoachingData | null>(null);
+    const [showCoaching, setShowCoaching] = useState(false);
+
+    // Mock AI Analysis Simulation
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (recorder.status === "processing") {
+            // Simulated delay for "Analyzing..."
+            recorder.setRecStatus("analyzing");
+
+            timer = setTimeout(() => {
+                // Mock Result Extraction
+                const now = new Date();
+                const hhmm = `${now.getHours()}:${now.getMinutes()}`;
+
+                // 1. Add Events
+                const newEvents: TimelineEvent[] = [
+                    { id: Date.now() + "1", time: hhmm, type: "info", content: "고객: 자동문 화이트 톤 선호 언급" },
+                    { id: Date.now() + "2", time: hhmm, type: "risk", content: "AI감지: 예산 우려 (가격 방어 필요)" },
+                    { id: Date.now() + "3", time: hhmm, type: "fact", content: "일정: 다음주 수요일 시공 희망" }
+                ];
+                setTimelineEvents(prev => [...prev, ...newEvents]);
+
+                // 2. Add Sentiment
+                setSentimentSegments(prev => [
+                    ...prev,
+                    { start: 0, end: 30, sentiment: "neutral" },
+                    { start: 30, end: 60, sentiment: "worry" },
+                    { start: 60, end: 90, sentiment: "positive" }
+                ]);
+
+                // 3. Auto-Fill Form (Demonstration)
+                setCategory("자동문");
+                setGlass("투명 강화"); // Detected "Transparent"
+                if (!customerName) setCustomerName("박지성 (음성추출)");
+
+                // 4. Generate Coaching Report
+                setCoachingData({
+                    leadershipScore: 78,
+                    tone: "차분함/전문적",
+                    goodPoints: ["고객 니즈 재확인 (Color)", "가격 안내 시점 적절"],
+                    badPoints: ["초반 스몰토크 부재", "기술 용어(3연동) 과다 사용"],
+                    missedChecklist: ["재방문 일정 확인"],
+                    nextAction: "다음 현장에서는 '고객의 불편함'을 먼저 물어보세요."
+                });
+
+                // Done
+                recorder.setRecStatus("idle");
+                setShowCoaching(true); // Open Report automatically
+                alert("📢 AI 분석 완료!\n- 타임라인 업데이트됨\n- 자동문/투명유리 자동선택됨\n- 코칭 리포트 생성됨");
+            }, 3000);
+        }
+        return () => clearTimeout(timer);
+    }, [recorder.status]);
+
+
     useEffect(() => {
         const data = readAdminSettings();
         if (data) setAdmin(data);
@@ -675,6 +746,8 @@ export default function FieldNewPage() {
     };
 
     // 실측 포인트
+    const { addCustomer, addOrder, customers, user } = useGlobalStore();
+    const router = useRouter(); // Use App Router for navigation
     const req = useMemo(() => getRequiredPoints(category, detail), [category, detail]);
     const [widthPoints, setWidthPoints] = useState<string[]>(Array(3).fill(""));
     const [heightPoints, setHeightPoints] = useState<string[]>(Array(3).fill(""));
@@ -698,7 +771,71 @@ export default function FieldNewPage() {
     const signature = useSignature();
 
     // 메모/사진
+    // 메모/사진
     const [siteMemo, setSiteMemo] = useState("");
+
+    // AR Auto-fill Handlers
+    const handleSetAutoW = (val: string) => {
+        // Fill all 3 points with the same value for now
+        setWidthPoints([val, val, val]);
+    };
+    const handleSetAutoH = (val: string) => {
+        setHeightPoints([val, val, val]);
+    };
+
+    /* =========================================
+       UX: 5-Step Wizard Logic
+       ========================================= */
+    const [currentStep, setCurrentStep] = useState(1);
+
+    // Validation Helpers
+    const validateStep = (step: number): boolean => {
+        switch (step) {
+            case 1: // Customer
+                return !!(customerName.trim() && customerPhone.trim() && customerAddress.trim());
+            case 2: // Product
+                return true; // Selects always have defaults
+            case 3: // Measurement
+                if (laserPhotos.length < 1) {
+                    // alert("레이저 레벨기 측정 사진을 1장 이상 첨부해주세요."); 
+                    // (Validation just checks status, alert on button click)
+                    return false;
+                }
+                // Check points
+                const wOk = widthPoints.every((v) => parsePositiveInt(v) !== null);
+                const hOk = heightPoints.every((v) => parsePositiveInt(v) !== null);
+                if (!wOk || !hOk) return false;
+                if (!confirmedWidth || !confirmedHeight) return false;
+                return true;
+            case 4: // Photo & AI (Optional but check warning)
+                if (shouldRequirePhoto && sitePhotos.length < 1) return false;
+                return true;
+            case 5: // Schedule/Pay (Final)
+                if (!depositDate || !requestedInstallDate || !paymentMethod) return false;
+                if (signature.isEmpty()) return false;
+                return true;
+            default:
+                return true;
+        }
+    };
+
+    const goNext = () => {
+        if (!validateStep(currentStep)) {
+            // Show specific error messages
+            if (currentStep === 1) alert("고객명, 연락처, 주소를 모두 입력해주세요.");
+            if (currentStep === 3) alert("레이저 사진 첨부 및 모든 실측값을 입력해주세요.");
+            if (currentStep === 4) alert("오차 10mm 이상이므로 현장 사진 첨부가 필수입니다.");
+            return;
+        }
+        setCurrentStep(prev => Math.min(5, prev + 1));
+        window.scrollTo(0, 0);
+    };
+
+    const goPrev = () => {
+        setCurrentStep(prev => Math.max(1, prev - 1));
+        window.scrollTo(0, 0);
+    };
+
     const [previews, setPreviews] = useState<Preview[]>([]);
 
     // 음성
@@ -1143,6 +1280,55 @@ export default function FieldNewPage() {
 
         const officeText = buildOfficeSummaryText();
 
+        // CRM AUTO-SAVE
+        try {
+            // 1. Check or Create Customer
+            const customerId = customerPhone.replace(/-/g, "").trim() || `unknown-${Date.now()}`;
+            const existing = customers.find(c => c.id === customerId);
+            if (!existing) {
+                addCustomer({
+                    id: customerId,
+                    name: customerName,
+                    phone: customerPhone,
+                    address: customerAddress + " " + detailAddress,
+                    memo: siteMemo,
+                    createdAt: new Date().toISOString().split("T")[0]
+                });
+            }
+
+            // 2. Create Order
+            addOrder({
+                id: `ord-${Date.now()}`,
+                customerId: customerId,
+                tenantId: user?.currentTenantId || "default",
+                status: "MEASURED",
+                createdAt: new Date().toISOString(),
+                measureDate: new Date().toISOString().split("T")[0],
+                installDate: requestedInstallDate || undefined,
+                estPrice: estimate.totalPrice || 0,
+                finalPrice: estimate.totalPrice || 0,
+                deposit: 0,
+                balance: estimate.totalPrice || 0,
+                paymentStatus: "Unpaid",
+                items: [{
+                    category,
+                    detail,
+                    location: installLocation,
+                    glass,
+                    color: "기본",
+                    width: confirmedWidth || 0,
+                    height: confirmedHeight || 0,
+                    quantity: quantity
+                }],
+                measureFiles: [],
+                installFiles: [],
+                asHistory: []
+            });
+            console.log("Auto-saved to CRM Store");
+        } catch (e) {
+            console.error("Failed to auto-save", e);
+        }
+
         if (target === "office") {
             await sendOffice(officeText);
             return;
@@ -1229,6 +1415,302 @@ ${payload}`;
         }
     };
 
+
+    // =================================================================
+    // STEP RENDERERS
+    // =================================================================
+
+    const renderStep1 = () => (
+        <div className={styles.animateFadeIn}>
+            <div className={styles.sectionTitle}>고객 및 실측자 정보</div>
+            <div className={styles.grid2}>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>고객명</span>
+                    <input className={styles.input} value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="예: 홍길동" />
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>연락처</span>
+                    <input className={styles.input} value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="예: 010-1234-5678" />
+                </label>
+                <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                    <span className={styles.labelText}>주소 (GPS 자동)</span>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <input
+                            className={styles.input}
+                            value={customerAddress}
+                            onChange={(e) => setCustomerAddress(e.target.value)}
+                            placeholder="📍 버튼을 누르면 자동 입력됩니다"
+                            readOnly
+                            style={{ backgroundColor: "#f9fafb" }}
+                        />
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!navigator.geolocation) {
+                                    alert("GPS를 지원하지 않는 브라우저입니다.");
+                                    return;
+                                }
+                                const confirmGps = confirm("현재 위치를 기반으로 주소를 검색하시겠습니까?");
+                                if (!confirmGps) return;
+                                try {
+                                    const { lat, lng } = await new Promise<{ lat: number, lng: number }>((resolve, reject) => {
+                                        navigator.geolocation.getCurrentPosition(
+                                            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                                            err => reject(err),
+                                            { enableHighAccuracy: true, timeout: 10000 }
+                                        );
+                                    });
+                                    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=ko`);
+                                    const data = await res.json();
+                                    const region = data.principalSubdivision || "";
+                                    const city = data.city || "";
+                                    const locality = data.locality || "";
+                                    const full = `${region} ${city} ${locality}`.replace(/\s+/g, " ").trim();
+                                    if (full) setCustomerAddress(full);
+                                    else { alert("주소를 찾을 수 없습니다."); setCustomerAddress("직접 입력 필요"); }
+                                } catch (e: any) {
+                                    console.error("GPS Error", e);
+                                    alert("GPS 정보를 가져오는데 실패했습니다.");
+                                }
+                            }}
+                            style={{ whiteSpace: "nowrap", padding: "0 16px", borderRadius: 8, background: "#3b82f6", color: "#fff", border: "none", fontWeight: "bold", cursor: "pointer" }}
+                        >
+                            📍 내 위치 주소 찾기
+                        </button>
+                    </div>
+                    <span className={styles.labelText} style={{ marginTop: 4 }}>상세 주소 (직접 입력)</span>
+                    <input className={styles.input} value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} placeholder="예: 한양아파트 101동 201호" />
+                </label>
+                <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, marginTop: 4 }}>
+                    <button type="button" className={styles.buttonGhost} onClick={async () => { try { const { lat, lng } = await getCurrentCoords(); openKakaoMaps(lat, lng); } catch { alert("위치 권한 필요"); } }}>🗺️ 지도 열기 (카카오)</button>
+                </div>
+            </div>
+            <div className={styles.sectionTitle} style={{ marginTop: 20 }}>실측자 정보</div>
+            <div className={styles.grid2}>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>이름</span>
+                    <input className={styles.input} value={measurerName} onChange={(e) => setMeasurerName(e.target.value)} />
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>연락처</span>
+                    <input className={styles.input} value={measurerPhone} onChange={(e) => setMeasurerPhone(e.target.value)} />
+                </label>
+            </div>
+        </div>
+    );
+
+    const renderStep2 = () => (
+        <div className={styles.animateFadeIn}>
+            <div className={styles.sectionTitle}>도어 옵션 및 사양</div>
+            <div className={styles.grid2}>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>시공 위치</span>
+                    <select className={styles.select} value={installLocation} onChange={(e) => setInstallLocation(e.target.value as InstallLocation)}>
+                        <option value="현관">현관</option>
+                        <option value="드레스룸">드레스룸</option>
+                        <option value="알파룸">알파룸</option>
+                        <option value="거실">거실</option>
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>수량(조)</span>
+                    <select className={styles.select} value={String(quantity)} onChange={(e) => setQuantity(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}>
+                        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={String(n)}>{n}조</option>)}
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>문 종류</span>
+                    <select className={styles.select} value={category} onChange={(e) => setCategory(e.target.value as DoorCategory)}>
+                        {["자동문", "수동문", "파티션"].map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>상세 유형</span>
+                    <select className={styles.select} value={detail} onChange={(e) => setDetail(e.target.value)}>
+                        {DOOR_OPTIONS[category].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                    <p className={styles.hint}>
+                        ✅ 실측 포인트: 가로 {req.wReq} / 세로 {req.hReq}
+                        {detail.includes("원슬라이딩") ? " (원슬라이딩: 각바 2EA 기본)" : ""}
+                    </p>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>유리 종류</span>
+                    <select className={styles.select} value={glass} onChange={(e) => setGlass(e.target.value)}>
+                        {GLASS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>열림 방향</span>
+                    <select className={styles.select} value={openDirection} onChange={(e) => setOpenDirection(e.target.value as OpenDirection)}>
+                        <option value="좌→우 열림">좌→우 (거실→현관 기준)</option>
+                        <option value="우→좌 열림">우→좌 (거실→현관 기준)</option>
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>현장 할인</span>
+                    <select className={styles.select} value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
+                        <option value="없음">없음</option>
+                        <option value="재구매 고객 할인">재구매 고객 할인</option>
+                        <option value="조건부 현장 할인">조건부 현장 할인</option>
+                        <option value="추가 자재 조건부 무상">추가 자재 조건부 무상</option>
+                        <option value="기타">기타</option>
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>할인 금액(원)</span>
+                    <input className={styles.input} type="number" value={discountAmountText} onChange={(e) => setDiscountAmountText(e.target.value)} />
+                </label>
+            </div>
+
+            <div className={styles.sectionTitle} style={{ marginTop: 20 }}>도어 디자인 선택</div>
+            <div className={styles.designGrid}>
+                {DESIGN_OPTIONS.map((d) => (
+                    <button key={d.id} type="button" className={`${styles.designCard} ${designId === d.id ? styles.designCardActive : ""}`} onClick={() => setDesignId(d.id)} title={d.name}>
+                        <div className={styles.designThumbWrap}>
+                            <img className={styles.designThumb} src={d.img} alt={d.name} onError={(e) => { if (!e.currentTarget.src.endsWith(DESIGN_PLACEHOLDER)) e.currentTarget.src = DESIGN_PLACEHOLDER; }} />
+                        </div>
+                        <div className={styles.designName}>{d.name}</div>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+
+    const renderStep3 = () => (
+        <div className={styles.animateFadeIn}>
+            <div className={styles.sectionTitle}>1. 레이저 레벨기 측정 (필수 1장↑)</div>
+            <div className={styles.photoBar}>
+                <input className={styles.file} type="file" accept="image/*" capture="environment" onChange={(e) => onPickFiles("laser", e.target.files)} />
+                {laserPhotos.length === 0 && <div className={styles.photoHint} style={{ color: "tomato" }}>📸 아직 사진이 없습니다. (진행 불가)</div>}
+            </div>
+            {laserPhotos.length > 0 && (
+                <div className={styles.photoGrid}>
+                    {laserPhotos.map((p, idx) => (
+                        <div className={styles.photoItem} key={p.url}>
+                            <img className={styles.photoImg} src={p.url} alt="laser" />
+                            <button type="button" className={styles.photoRemove} onClick={() => removePreview(previews.findIndex(x => x.url === p.url))}>x</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className={styles.sectionTitle} style={{ marginTop: 30 }}>2. 실측 포인트 입력 (mm)</div>
+            <div className={styles.grid2}>
+                <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                    <span className={styles.labelText}>가로 ({req.wReq}개)</span>
+                    <div className={styles.grid2}>
+                        {widthPoints.map((v, i) => (
+                            <input key={`w-${i}`} type="number" inputMode="numeric" className={styles.input} value={v} onChange={(e) => setPoint("w", i, e.target.value)} placeholder={`가로 ${i + 1}`} />
+                        ))}
+                    </div>
+                </label>
+                <label className={styles.label} style={{ gridColumn: "1 / -1" }}>
+                    <span className={styles.labelText}>세로 ({req.hReq}개)</span>
+                    <div className={styles.grid2}>
+                        {heightPoints.map((v, i) => (
+                            <input key={`h-${i}`} type="number" inputMode="numeric" className={styles.input} value={v} onChange={(e) => setPoint("h", i, e.target.value)} placeholder={`세로 ${i + 1}`} />
+                        ))}
+                    </div>
+                </label>
+            </div>
+
+            <AutoFillFromAR setW={(val) => setWidthPoints(Array(req.wReq).fill(val))} setH={(val) => setHeightPoints(Array(req.hReq).fill(val))} setMemo={setSiteMemo} />
+
+            <div className={styles.summary} style={{ marginTop: 20 }}>
+                <div className={styles.summaryRow}><span className={styles.badge}>확정 가로</span><span className={styles.summaryValue}>{confirmedWidth ?? "-"}mm</span></div>
+                <div className={styles.summaryRow}><span className={styles.badge}>확정 세로</span><span className={styles.summaryValue}>{confirmedHeight ?? "-"}mm</span></div>
+                <div className={styles.summaryRow} style={{ color: (wStats?.spread || 0) >= 5 ? "tomato" : "inherit" }}><span className={styles.badge}>가로 오차</span><span>{wStats?.spread ?? "-"}mm</span></div>
+                <div className={styles.summaryRow} style={{ color: (hStats?.spread || 0) >= 5 ? "tomato" : "inherit" }}><span className={styles.badge}>세로 오차</span><span>{hStats?.spread ?? "-"}mm</span></div>
+                {shouldRecommendExtraMaterial && <div className={styles.summaryRow} style={{ gridColumn: "1/-1", color: "orange", fontWeight: "bold" }}>⚠️ {shouldRequirePhoto ? "10mm 이상 (사진필수)" : "5mm 이상 (추가자재 권장)"}</div>}
+            </div>
+        </div>
+    );
+
+    const renderStep4 = () => (
+        <div className={styles.animateFadeIn}>
+            <div className={styles.sectionTitle}>현장 사진 (일반)</div>
+            <div className={styles.photoBar}>
+                <input className={styles.file} type="file" accept="image/*" multiple capture="environment" onChange={(e) => onPickFiles("site", e.target.files)} />
+                <div className={styles.photoHint}>사진 여러 장 선택 가능 {shouldRequirePhoto ? "✅ 오차 10mm↑이면 최소 1장 필수" : ""}</div>
+            </div>
+            {sitePhotos.length > 0 && (
+                <div className={styles.photoGrid}>
+                    {sitePhotos.map((p) => (
+                        <div className={styles.photoItem} key={p.url}>
+                            <img className={styles.photoImg} src={p.url} alt="site" />
+                            <button type="button" className={styles.photoRemove} onClick={() => removePreview(previews.findIndex(x => x.url === p.url))}>x</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className={styles.sectionTitle} style={{ marginTop: 30 }}>✨ AI 가상 시공 미리보기</div>
+            {sitePhotos.length > 0 ? (
+                <button type="button" onClick={() => { if (sitePhotos[0]?.url) { setSiteImage(sitePhotos[0].url); setShowPreviewModal(true); } }} className={styles.buttonGhost} style={{ width: "100%", justifyContent: "center" }}>
+                    🎨 가상 시공 실행하기
+                </button>
+            ) : (
+                <div style={{ padding: 20, background: "#f5f5f5", borderRadius: 8, textAlign: "center", color: "#888" }}>현장 사진을 먼저 업로드해주세요.</div>
+            )}
+            <VirtualPreviewModal isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)} imageSrc={siteImage || ""} doorOptions={{ category, type: detail, glass, color: (designId !== "design-02") ? "색상 변경" : "화이트" }} />
+        </div>
+    );
+
+    const renderStep5 = () => (
+        <div className={styles.animateFadeIn}>
+            <div className={styles.sectionTitle}>일정 및 결제</div>
+            <div className={styles.grid2}>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>입금 예정일</span>
+                    <input type="date" className={styles.input} value={depositDate} onChange={(e) => setDepositDate(e.target.value)} />
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>시공 희망일</span>
+                    <input type="date" className={styles.input} value={requestedInstallDate} onChange={(e) => setRequestedInstallDate(e.target.value)} />
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>결제 방식</span>
+                    <select className={styles.select} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
+                        <option value="현금결재">현금결재</option>
+                        <option value="카드결재">카드결재</option>
+                        <option value="세금계산서">세금계산서 발행</option>
+                    </select>
+                </label>
+                <label className={styles.label}>
+                    <span className={styles.labelText}>특이사항 메모</span>
+                    <textarea className={styles.textarea} value={siteMemo} onChange={(e) => setSiteMemo(e.target.value)} placeholder="예: 엘리베이터 없음, 주차 협소 등" style={{ height: 80 }} />
+                </label>
+            </div>
+
+            <div className={styles.sectionTitle} style={{ marginTop: 30 }}>고객 서명</div>
+            <div className={styles.signatureBox}>
+                <canvas
+                    ref={signature.canvasRef}
+                    className={styles.signatureCanvas}
+                    onPointerDown={signature.start}
+                    onPointerMove={signature.draw}
+                    onPointerUp={signature.end}
+                    onPointerLeave={signature.end}
+                />
+                <button type="button" className={styles.signatureClear} onClick={signature.clear}>서명 초기화</button>
+            </div>
+
+            <div className={styles.sectionTitle} style={{ marginTop: 30 }}>최종 확인 및 전송</div>
+            <div style={{ whiteSpace: "pre-wrap", background: "#f8f9fa", padding: 16, borderRadius: 8, fontSize: 13, maxHeight: 200, overflowY: "auto", border: "1px solid #ddd" }}>
+                {estimateTextForUI}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button type="button" className={styles.buttonGhost} onClick={() => send("office")}>🏢 사무실 전송</button>
+                <button type="button" className={styles.buttonGhost} onClick={() => send("customer")}>👤 고객 전송</button>
+                <button type="button" className={styles.buttonPrimary} style={{ flex: 1 }} onClick={() => send("both")}>🚀 모두 전송 (완료)</button>
+            </div>
+        </div>
+    );
+
+
+
     const estimateTextForUI = useMemo(() => buildEstimateText(), [
         estimate.isSupported,
         estimate.totalBeforeDiscount,
@@ -1275,6 +1757,9 @@ ${payload}`;
                         <p className={styles.subtitle}>옵션 → 레이저레벨 사진 → 실측 → 현장사진 → 일정/결재 → 고객 확인(견적/서명) → 전송</p>
 
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                            <button type="button" className={styles.buttonGhost} onClick={() => router.push("/manage")} style={{ borderColor: "#4f46e5", color: "#4f46e5", fontWeight: "bold" }}>
+                                📅 통합 관리 (스케줄)
+                            </button>
                             <a className={styles.buttonGhost} href="/admin">
                                 ⚙️ 관리자 설정(사무실/실측자)
                             </a>
@@ -2037,6 +2522,42 @@ ${payload}`;
                     </div>
                 )}
             </main>
+
+            {/* AI Coaching Timeline (Visible if events exist) */}
+            {timelineEvents.length > 0 && (
+                <div style={{ margin: "20px 16px 80px", background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                    <Timeline events={timelineEvents} segments={sentimentSegments} />
+                    <button
+                        onClick={() => setShowCoaching(true)}
+                        style={{ width: "100%", padding: 12, borderTop: "1px solid #eee", background: "none", color: "#3b82f6", fontWeight: "bold", borderBottomLeftRadius: 12, borderBottomRightRadius: 12, cursor: "pointer" }}
+                    >
+                        📊 코칭 리포트 보기
+                    </button>
+                </div>
+            )}
+
+            {/* AI Recording Widget (Floating) */}
+            <RecordingWidget
+                status={recorder.status}
+                onStart={recorder.startRecording}
+                onStop={recorder.stopRecording}
+                onPause={recorder.pauseRecording}
+                onResume={recorder.resumeRecording}
+            />
+
+            {/* Coaching Report Modal */}
+            <CoachingReport
+                isOpen={showCoaching}
+                onClose={() => setShowCoaching(false)}
+                data={coachingData}
+            />
+
+            {/* AR Auto-fill from URL params */}
+            <AutoFillFromAR
+                setW={handleSetAutoW}
+                setH={handleSetAutoH}
+                setMemo={setSiteMemo}
+            />
         </>
     );
 }
