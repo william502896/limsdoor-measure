@@ -12,9 +12,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { label: "매입단가 관리", href: "/admin/miso-costs", icon: "🔢" }, // Moved to top
       { label: "대시보드", href: "/admin", icon: "🏠" },
       { label: "거래처 관리", href: "/admin/partners", icon: "🏢" },
+      { label: "매입단가 관리", href: "/admin/miso-costs", icon: "🔢" },
       { label: "품목/자재", href: "/admin/items", icon: "📦" },
       { label: "단가/마진", href: "/admin/prices", icon: "💰" },
       { label: "전자명세서", href: "/admin/invoices", icon: "📄" },
