@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // 서버 전용(절대 공개 X)
-);
+const getSupabase = () => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error("Missing Supabase Env Vars");
+    }
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+};
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
@@ -15,6 +20,7 @@ export async function GET(req: Request) {
     const width_key = searchParams.get("width_key") ?? "";
     const variant = searchParams.get("variant") ?? "";
 
+    const supabase = getSupabase();
     const q = supabase.from("miso_sale_prices").select("*");
 
     if (product_type) q.eq("product_type", product_type);
@@ -53,6 +59,7 @@ export async function POST(req: Request) {
         memo: body.memo ?? "",
     };
 
+    const supabase = getSupabase();
     const { data, error } = await supabase
         .from("miso_sale_prices")
         .upsert(payload, { onConflict: "product_type,coating,glass_group,is_knockdown,width_key,variant" })
@@ -80,6 +87,7 @@ export async function PATCH(req: Request) {
     if (typeof body.priority === "number") patch.priority = body.priority;// NEW
     if (typeof body.memo === "string") patch.memo = body.memo;
 
+    const supabase = getSupabase();
     const { data, error } = await supabase
         .from("miso_sale_prices")
         .update(patch)
