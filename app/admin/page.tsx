@@ -25,7 +25,7 @@ function AdminContent() {
     // Dynamic Title based on view
     const getTitle = () => {
         switch (view) {
-            case "dashboard": return "통합 대시보드 (Admin)";
+            case "dashboard": return "통합 대시보드 (Admin) - v0.1.1 (DEBUG)";
             case "customer": return "고객 관리";
             case "contract": return "계약 / 견적 관리";
             case "as": return "AS / 하자 관리";
