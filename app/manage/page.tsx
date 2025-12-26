@@ -6,6 +6,7 @@ import ManageLayout from "../components/Manage/Layout/ManageLayout";
 import CustomerList from "@/app/components/Manage/CustomerList";
 import CustomerDetail from "@/app/components/Manage/CustomerDetail";
 import AnalyticsDashboard from "@/app/components/Manage/AnalyticsDashboard";
+import RadioUserList from "@/app/components/Manage/RadioUserList"; // NEW IMPORT
 
 function ManageContent() {
     const searchParams = useSearchParams();
@@ -25,7 +26,9 @@ function ManageContent() {
             case "customer": return "고객 관리";
             case "contract": return "계약 / 견적 관리";
             case "as": return "AS / 하자 관리";
+            case "as": return "AS / 하자 관리";
             case "voice": return "음성 / AI 기록";
+            case "radio": return "무전기 사용자 관리"; // New
             case "reports": return "영업 리포트";
             case "settings": return "설정";
             default: return "관리 허브";
@@ -53,6 +56,8 @@ function ManageContent() {
                     )}
                 </div>
             )}
+
+            {view === "radio" && <RadioUserList />}
 
             {/* Placeholders for other views */}
             {["contract", "as", "voice", "reports", "settings"].includes(view) && (

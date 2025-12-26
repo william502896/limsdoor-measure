@@ -57,6 +57,19 @@ export default function RootRedirector() {
             소비자 (Shop App)
           </button>
         </div>
+
+        {/* Feature Tests */}
+        <div className="w-full max-w-md mt-8 border-t border-slate-700 pt-8">
+          <h2 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest text-center">New Features</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <button onClick={() => router.push('/consumer/ar')} className="p-3 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-bold text-sm flex items-center justify-center gap-2">
+              <span>📷</span> AR 카메라
+            </button>
+            <button onClick={() => router.push('/radio')} className="p-3 bg-slate-800 border border-slate-700 rounded-xl hover:bg-slate-700 font-bold text-sm flex items-center justify-center gap-2">
+              <span>📻</span> 무전기 (Radio)
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

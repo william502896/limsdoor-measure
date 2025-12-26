@@ -296,7 +296,23 @@ export default function ArPage() {
     // Actions
     // ==========================================
     const startAR = async () => {
-        if (!navigator.xr) return alert("WebXR 미지원");
+        // 1. Check Secure Context (Required for WebXR)
+        if (!window.isSecureContext) {
+            alert(
+                "⚠️ 보안 컨텍스트 오류 (HTTPS 필요)\n\n" +
+                "현재 IP 접속(HTTP) 중이므로 AR이 차단됩니다.\n" +
+                "해결 방법:\n" +
+                "1. Chrome 주소창에 'chrome://flags' 입력\n" +
+                "2. 'Insecure origins treated as secure' 검색\n" +
+                "3. 'Enabled' 설정 후 IP 주소 입력 및 재실행"
+            );
+            return;
+        }
+
+        // 2. Check WebXR Support
+        if (!navigator.xr) {
+            return alert("⚠️ 이 기기는 WebXR(AR)을 지원하지 않습니다.\n(Chrome 브라우저 또는 안드로이드 기기 필요)");
+        }
 
         // Permission
         if (useLevelingAssist && !leveling.permissionGranted) {
@@ -336,8 +352,8 @@ export default function ArPage() {
                 setMode("measurement");
                 setStatus("첫 번째 지점(기준)을 찍으세요");
             }
-        } catch (e) {
-            alert("AR 세션 시작 실패");
+        } catch (e: any) {
+            alert(`AR 세션 시작 실패: ${e.message}\n(WebXR 권한 거부 또는 호환성 문제)`);
         }
     };
 

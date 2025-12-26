@@ -106,6 +106,23 @@ export interface ArScene {
     capturedImage?: string; // DataURL of the AR capture
 }
 
+export interface ArFieldData {
+    width: number;
+    height: number;
+    diffW: number;
+    diffH: number;
+    memo: string;
+    photoUrl?: string;
+    measurerName: string;
+    measuredAt: string;
+}
+
+export interface ArData {
+    consumer: ArScene;
+    field?: ArFieldData;
+    status: "PENDING" | "REVIEW_NEEDED" | "APPROVED" | "REJECTED";
+}
+
 export interface MeasureItem {
     category: string;
     detail: string;
@@ -187,6 +204,9 @@ export interface Order {
 
     // Financials (Installer)
     installerRevenue?: InstallRevenue;
+
+    // AR Verification (New)
+    arData?: ArData;
 }
 
 export interface TenantSettings {

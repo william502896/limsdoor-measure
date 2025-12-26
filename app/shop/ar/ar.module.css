@@ -1,0 +1,61 @@
+/* AR Root Container */
+.arRoot {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    background: #000;
+}
+
+/* Layer 1: Camera (Video/Canvas) - Z-Index 0 */
+.cameraLayer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+/* Layer 2: Guide Overlay (Frames, Text) - Z-Index 10 */
+.guideOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    /* Critical: Guide never steals touch */
+}
+
+/* Layer 3: UI Layer (Buttons, BottomSheet) - Z-Index 20 */
+.uiLayer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+    /* Default: Let touches pass through to camera if no button is there */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Helper: Allow interactions only on specific elements */
+.uiTouchable {
+    pointer-events: auto;
+    touch-action: manipulation;
+    /* Prevent double-tap zoom, etc. */
+}
+
+/* Bottom Sheet Animation & Hiding Logic */
+.bottomSheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+/* Hide UI during capture (triggered by React state) */
+.bottomSheet.hiddenForCapture {
+    transform: translateY(110%);
+    opacity: 0;
+    pointer-events: none;
+}

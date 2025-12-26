@@ -1,9 +1,23 @@
-﻿
+
 > limsdoor-measure@0.1.0 build
 > next build
 
-   ??Next.js 16.0.10 (Turbopack)
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Environments: .env.local
 
    Creating an optimized production build ...
- ??Compiled successfully in 115s
+ ✓ Compiled successfully in 70s
    Running TypeScript ...
+Failed to compile.
+
+./app/admin/invoices/[id]/page.tsx:144:42
+Type error: Cannot find name 'ArrowRight'.
+
+[0m [90m 142 |[39m                                     [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 143 |[39m                                     [33m<[39m[33mdiv[39m className[33m=[39m[32m"flex gap-2 items-center"[39m[33m>[39m
+[31m[1m>[22m[39m[90m 144 |[39m                                         [33m<[39m[33mArrowRight[39m size[33m=[39m{[35m14[39m} className[33m=[39m[32m"text-slate-400"[39m [33m/[39m[33m>[39m
+ [90m     |[39m                                          [31m[1m^[22m[39m
+ [90m 145 |[39m                                         [33m<[39m[33mselect[39m
+ [90m 146 |[39m                                             className[33m=[39m[32m"flex-1 p-1.5 border rounded text-xs bg-white"[39m
+ [90m 147 |[39m                                             value[33m=[39m{mapping[idx] [33m||[39m [32m""[39m}[0m
+Next.js build worker exited with code: 1 and signal: null
