@@ -1,5 +1,7 @@
 import { supabaseServer } from "@/app/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 type PaymentRow = {
     id: string;
     estimate_id: string;
