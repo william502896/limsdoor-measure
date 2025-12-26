@@ -20,7 +20,8 @@ import {
     Truck,
     Bell,
     X,
-    Radio
+    Radio,
+    Coins
 } from "lucide-react";
 
 type SidebarProps = {
@@ -55,6 +56,7 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
         { id: "as", label: "AS/하자", icon: Wrench, href: "/manage?view=as" },
         { id: "voice", label: "음성/AI", icon: Mic, href: "/manage?view=voice" },
         { id: "radio", label: "무전기", icon: Radio, href: "/manage?view=radio" },
+        { id: "miso-costs", label: "매입단가(미소)", icon: Coins, href: "/admin/miso-costs" },
         { id: "reports", label: "리포트", icon: BarChart3, href: "/manage?view=reports" },
     ];
 
