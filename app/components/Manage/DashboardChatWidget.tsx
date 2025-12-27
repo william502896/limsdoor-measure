@@ -98,7 +98,7 @@ export default function DashboardChatWidget() {
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-slate-700" : "bg-indigo-600"}`}>
                             {m.role === "user" ? <span className="text-[10px]">U</span> : <Bot size={12} className="text-white" />}
                         </div>
-                        <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${m.role === "user"
+                        <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${m.role === "user"
                             ? "bg-slate-800 text-slate-200"
                             : "bg-indigo-900/40 border border-indigo-500/30 text-indigo-100"
                             }`}>
@@ -110,29 +110,37 @@ export default function DashboardChatWidget() {
                 ))}
                 {loading && (
                     <div className="flex gap-2">
-                        <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 animate-pulse">
                             <Bot size={12} className="text-white" />
                         </div>
-                        <div className="bg-indigo-900/40 border border-indigo-500/30 rounded-xl px-3 py-2 text-xs text-indigo-300">
-                            Thinking...
+                        <div className="bg-indigo-900/40 border border-indigo-500/30 rounded-xl px-3 py-2 text-xs text-indigo-300 animate-pulse">
+                            답변 생성 중...
                         </div>
                     </div>
                 )}
+                <div ref={scrollRef} />
             </div>
 
             {/* Input */}
             <div className="p-3 bg-slate-900 border-t border-slate-800">
                 <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="relative">
-                    <input
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600"
-                        placeholder="메시지 입력..."
+                    <textarea
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600 resize-none"
+                        placeholder="메시지 입력 (Shift+Enter 줄바꿈)..."
+                        rows={2}
                         value={input}
                         onChange={e => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                     />
                     <button
                         type="submit"
                         disabled={!input.trim() || loading}
-                        className="absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                        className="absolute right-1.5 bottom-2.5 p-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-colors"
                     >
                         <Send size={14} />
                     </button>

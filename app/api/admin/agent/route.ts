@@ -20,7 +20,8 @@ export async function GET() {
 async function getSystemContext() {
     const supabase = supabaseServer();
     let context = "You are LIMS AI Assistant, an expert helper for the 'Limsdoor Measure' system.\n";
-    context += "You have access to the latest internal data. When asked about prices, ALWAYS use the data below.\n\n";
+    context += "You have access to the latest internal data. When asked about prices, ALWAYS use the data below.\n";
+    context += "IMPORTANT: Provide detailed, comprehensive explanations. Do not be concise. The user prefers long, thorough answers.\n\n";
 
     try {
         // Fetch recent active sales prices
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
             history: history,
             systemInstruction: systemInstruction, // Inject here
             generationConfig: {
-                maxOutputTokens: 1000,
+                maxOutputTokens: 4000,
             },
         });
 
