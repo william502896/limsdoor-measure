@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
         });
 
         // 2025-12-27: Inject System Context
-        const systemInstruction = await getSystemContext();
+        const systemInstructionText = await getSystemContext();
 
         // Pass system instruction to model config (v0.24.1+)
         const model = getGeminiModel(MODEL_TEXT);
@@ -101,7 +101,11 @@ export async function POST(req: NextRequest) {
         // Start Chat with History
         const chat = model.startChat({
             history: history,
-            systemInstruction: systemInstruction, // Inject here
+            // CORRECT FORMAT: Must be Content object, not string
+            systemInstruction: {
+                role: "system",
+                parts: [{ text: systemInstructionText }]
+            },
             generationConfig: {
                 maxOutputTokens: 4000,
             },
