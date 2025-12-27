@@ -92,7 +92,7 @@ type PriceRow = { knockdown: number; finished: number; install: number };
 type WidthGlassTable = Record<number, Partial<Record<MisoGlassGroup, PriceRow>>>;
 
 // 1S 수동
-const T_1S_MANUAL: Record<MisoCoating, WidthGlassTable> = {
+export const T_1S_MANUAL: Record<MisoCoating, WidthGlassTable> = {
     FLUORO: {
         1100: { CLEAR_BRONZE_AQUA: { knockdown: 150000, finished: 270000, install: 400000 }, SATIN: { knockdown: 160000, finished: 290000, install: 420000 }, WIRE: { knockdown: 170000, finished: 380000, install: 510000 } },
         1300: { CLEAR_BRONZE_AQUA: { knockdown: 160000, finished: 290000, install: 420000 }, SATIN: { knockdown: 160000, finished: 290000, install: 420000 }, WIRE: { knockdown: 170000, finished: 380000, install: 510000 } },
@@ -106,7 +106,7 @@ const T_1S_MANUAL: Record<MisoCoating, WidthGlassTable> = {
 };
 
 // FIX (1S+1F / 2S(H바))
-const T_FIX: Record<FixVariant, Record<MisoCoating, WidthGlassTable>> = {
+export const T_FIX: Record<FixVariant, Record<MisoCoating, WidthGlassTable>> = {
     "1S1F": {
         FLUORO: {
             800: { CLEAR_BRONZE_AQUA: { knockdown: 90000, finished: 190000, install: 270000 } },
@@ -137,7 +137,7 @@ const T_FIX: Record<FixVariant, Record<MisoCoating, WidthGlassTable>> = {
 };
 
 // 1S 자동
-const T_1S_AUTO: Record<MisoCoating, WidthGlassTable> = {
+export const T_1S_AUTO: Record<MisoCoating, WidthGlassTable> = {
     FLUORO: {
         1100: { CLEAR_BRONZE_AQUA: { knockdown: 550000, finished: 670000, install: 870000 }, SATIN: { knockdown: 570000, finished: 700000, install: 900000 }, WIRE: { knockdown: 590000, finished: 780000, install: 980000 } },
         1250: { CLEAR_BRONZE_AQUA: { knockdown: 570000, finished: 700000, install: 900000 }, SATIN: { knockdown: 570000, finished: 700000, install: 900000 }, WIRE: { knockdown: 590000, finished: 780000, install: 980000 } },
@@ -151,7 +151,7 @@ const T_1S_AUTO: Record<MisoCoating, WidthGlassTable> = {
 };
 
 // 3연동 수동
-const T_3T_MANUAL: Record<MisoCoating, WidthGlassTable> = {
+export const T_3T_MANUAL: Record<MisoCoating, WidthGlassTable> = {
     FLUORO: {
         1300: { CLEAR_BRONZE_AQUA: { knockdown: 260000, finished: 400000, install: 530000 }, SATIN: { knockdown: 270000, finished: 430000, install: 560000 }, WIRE: { knockdown: 280000, finished: 530000, install: 660000 } },
         1500: { CLEAR_BRONZE_AQUA: { knockdown: 270000, finished: 430000, install: 560000 }, SATIN: { knockdown: 270000, finished: 430000, install: 560000 }, WIRE: { knockdown: 280000, finished: 530000, install: 660000 } },
@@ -165,7 +165,7 @@ const T_3T_MANUAL: Record<MisoCoating, WidthGlassTable> = {
 };
 
 // 3연동 자동
-const T_3T_AUTO: Record<MisoCoating, WidthGlassTable> = {
+export const T_3T_AUTO: Record<MisoCoating, WidthGlassTable> = {
     FLUORO: {
         1300: { CLEAR_BRONZE_AQUA: { knockdown: 700000, finished: 850000, install: 1050000 }, SATIN: { knockdown: 720000, finished: 880000, install: 1080000 }, WIRE: { knockdown: 740000, finished: 970000, install: 1170000 } },
         1500: { CLEAR_BRONZE_AQUA: { knockdown: 720000, finished: 880000, install: 1080000 }, SATIN: { knockdown: 720000, finished: 880000, install: 1080000 }, WIRE: { knockdown: 740000, finished: 970000, install: 1170000 } },

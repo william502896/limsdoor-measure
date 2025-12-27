@@ -3,6 +3,8 @@ import { newRequestId, json, error, nowMs } from "@/app/lib/api-utils";
 import { logApi } from "@/app/lib/logger";
 import { getGeminiModel, MODEL_TEXT } from "@/app/lib/gemini-client";
 import { supabaseServer } from "@/app/lib/supabase/server";
+// Import key static tables for fallback reference
+import { T_1S_MANUAL, T_3T_MANUAL } from "@/app/lib/miso_cost_data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +22,27 @@ export async function GET() {
 async function getSystemContext() {
     const supabase = supabaseServer();
     let context = "You are LIMS AI Assistant, an expert helper for the 'Limsdoor Measure' system.\n";
-    context += "You have access to the latest internal data. When asked about prices, ALWAYS use the data below.\n";
+    context += "You have access to internal data. Always prioritize 'CONFIRMED SALES PRICES' from the database.\n";
+    context += "If specific sales price is missing, you MAY use the 'STATIC PURCHASE COST REFERENCE' below to estimate input costs, but clearly state these are 'Raw Material/Purchase Costs' not 'Sales Prices'.\n";
     context += "IMPORTANT: Provide detailed, comprehensive explanations. Do not be concise. The user prefers long, thorough answers.\n\n";
+
+    // 1. Static Data Injection (Purchase Costs)
+    context += "=== STATIC PURCHASE COST REFERENCE (Unit: KRW / VAT Excluded) ===\n";
+    context += "Use this to answer 'Purchase Cost(매입단가)' inquiries if DB is empty.\n";
+
+    // Simplification for 3-Interlocking (Most common) - Fluoro
+    context += "[3-Interlocking Manual (3연동 수동) - Fluoro Coating]\n";
+    context += "- Width 1300mm: Clear/Acqua/Bronze=260k, Satin=270k, Wire=280k (Knockdown)\n";
+    context += "- Width 1500mm: Clear/Acqua/Bronze=270k, Satin=270k, Wire=280k (Knockdown)\n";
+    context += "- Width 1700mm: Clear/Acqua/Bronze=280k, Satin=280k, Wire=280k (Knockdown)\n";
+    context += "* For Completed Set (Finished), add approx +150k~250k. For Install, add +130k.\n\n";
+
+    // Simplification for 1S Manual
+    context += "[1-Swing Manual (1S 수동) - Fluoro Coating]\n";
+    context += "- Width 1100mm: Clear=150k, Satin=160k, Wire=170k (Knockdown)\n";
+    context += "- Width 1300mm: Clear=160k, Satin=160k, Wire=170k (Knockdown)\n";
+
+    context += "=================================================================\n\n";
 
     try {
         // Fetch recent active sales prices
@@ -45,6 +66,7 @@ async function getSystemContext() {
             context += "If the user matches one of these specs, quote the exact amount. If not, explain that you see the above list but their specific request isn't there.\n";
         } else {
             context += "(No active confirmed sales prices found in database yet.)\n";
+            context += "Since no sales prices are found, please rely on the STATIC PURCHASE COST REFERENCE above to at least provide the purchase cost (매입단가).\n";
         }
 
     } catch (e) {
