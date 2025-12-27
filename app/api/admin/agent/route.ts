@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { newRequestId, json, error, nowMs } from "@/app/lib/api-utils";
 import { logApi } from "@/app/lib/logger";
 import { getGeminiModel, MODEL_TEXT } from "@/app/lib/gemini-client";
+import { supabaseServer } from "@/app/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,44 @@ export async function GET() {
         route: "/api/admin/agent",
         note: "POST to this endpoint to use the AI agent (Gemini SDK)"
     });
+}
+
+// 2025-12-27: Context Injection Helper
+async function getSystemContext() {
+    const supabase = supabaseServer();
+    let context = "You are LIMS AI Assistant, an expert helper for the 'Limsdoor Measure' system.\n";
+    context += "You have access to the latest internal data. When asked about prices, ALWAYS use the data below.\n\n";
+
+    try {
+        // Fetch recent active sales prices
+        const { data: prices, error } = await supabase
+            .from("miso_sale_prices")
+            .select("*")
+            .eq("is_published", true)
+            .order("updated_at", { ascending: false })
+            .limit(20);
+
+        if (prices && prices.length > 0) {
+            context += "=== RECENT CONFIRMED SALES PRICES (Unit: KRW) ===\n";
+            prices.forEach((p: any) => {
+                const spec = `Type: ${p.product_type} / Glass: ${p.glass_group} / WidthKey: ${p.width_key} / Coating: ${p.coating}`;
+                const detail = p.variant ? ` / Variant: ${p.variant}` : "";
+                const price = `SaleBase: ${p.sale_base.toLocaleString()} KRW`;
+                const memo = p.memo ? ` (Note: ${p.memo})` : "";
+                context += `- [${spec}${detail}] -> ${price}${memo}\n`;
+            });
+            context += "=================================================\n\n";
+            context += "If the user matches one of these specs, quote the exact amount. If not, explain that you see the above list but their specific request isn't there.\n";
+        } else {
+            context += "(No active confirmed sales prices found in database yet.)\n";
+        }
+
+    } catch (e) {
+        console.error("Context fetch error:", e);
+        context += "(Error fetching real-time data. Apologize if data is missing.)\n";
+    }
+
+    return context;
 }
 
 export async function POST(req: NextRequest) {
@@ -52,11 +91,16 @@ export async function POST(req: NextRequest) {
             meta: { messageCount: messages.length, type: "request" }
         });
 
+        // 2025-12-27: Inject System Context
+        const systemInstruction = await getSystemContext();
+
+        // Pass system instruction to model config (v0.24.1+)
         const model = getGeminiModel(MODEL_TEXT);
 
         // Start Chat with History
         const chat = model.startChat({
             history: history,
+            systemInstruction: systemInstruction, // Inject here
             generationConfig: {
                 maxOutputTokens: 1000,
             },
