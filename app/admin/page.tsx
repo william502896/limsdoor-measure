@@ -50,28 +50,7 @@ function AdminContent() {
                 <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">{getTitle()}</h1>
             </div>
 
-            {/* Tenant Switcher */}
-            <div className="mb-6 flex items-center gap-4 bg-white/5 backdrop-blur p-4 rounded-2xl border border-white/10 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <span className="bg-indigo-600 text-white p-1.5 rounded-lg text-xs font-bold">🏢 지점</span>
-                    <span className="font-bold text-slate-300 text-sm">현재 접속중:</span>
-                </div>
-                <select
-                    className="border border-slate-600 p-2 rounded-lg text-sm bg-slate-800 text-white hover:border-indigo-400 focus:outline-indigo-500 transition-colors cursor-pointer"
-                    value={currentTenant?.id}
-                    onChange={(e) => switchTenant(e.target.value)}
-                >
-                    {tenants.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                </select>
-                <div className="hidden md:flex ml-auto text-xs text-slate-400 gap-2">
-                    <span>👤 {user?.name}</span>
-                    <span className="px-2 py-0.5 bg-slate-700 rounded text-slate-300 border border-slate-600">
-                        {user?.roles[currentTenant?.id || ""] || "GUEST"}
-                    </span>
-                </div>
-            </div>
+            {/* Tenant Switcher & Radio Moved to AnalyticsDashboard */}
 
             {view === "dashboard" && <AnalyticsDashboard />}
 

@@ -1,29 +1,127 @@
 @import "tailwindcss";
 
 :root {
+  /* --- Legacy / Tailwind Support --- */
   --background: #ffffff;
   --foreground: #171717;
-}
 
-/* Force light mode style for professional look, unless user system overrides, 
-   but for now let's stick to clean white base to match the new design. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Optional: support dark mode if user wants, but default to white for the 'professional' request if that was the issue. 
-       Actually, let's keep dark mode variables but ensuring they are nice. 
-       Slate-900 is good, but #0a0a0a is pure black. */
-    --background: #0f172a;
-    /* Slate 900 */
-    --foreground: #ededed;
-  }
+  /* --- SaaS UI Engine Variables --- */
+
+  /* Colors */
+  --ui-primary: #2563eb;
+  --ui-secondary: #64748b;
+  --ui-accent: #f97316;
+  --ui-bg: #ffffff;
+  --ui-text: #0f172a;
+
+  /* Background */
+  --ui-app-bg-image: none;
+  --ui-page-bg-image: none;
+  --ui-bg-fixed: scroll;
+  --ui-bg-repeat: no-repeat;
+  --ui-bg-blur: 0px;
+  --ui-bg-dim: 0;
+
+  /* Fonts */
+  --ui-font-heading: "Pretendard", system-ui, -apple-system, "Segoe UI", Arial;
+  --ui-font-body: "Pretendard", system-ui, -apple-system, "Segoe UI", Arial;
+  --ui-font-heading-weight: 700;
+  --ui-font-body-weight: 400;
+
+  /* Buttons */
+  --ui-btn-radius: 14px;
+  --ui-btn-height: 44px;
+  --ui-btn-pad-x: 16px;
+  --ui-btn-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  --ui-tap-anim: 1;
+
+  /* Icons */
+  --ui-icon-set: OUTLINE;
+  --ui-icon-color: var(--ui-text);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-font-body);
+  font-weight: var(--ui-font-body-weight);
+}
+
+/* ✅ UI Page Container */
+.ui-page {
+  position: relative;
+  min-height: 100vh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  overflow: hidden;
+}
+
+.ui-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--ui-page-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: var(--ui-bg-repeat);
+  background-attachment: var(--ui-bg-fixed);
+  filter: blur(var(--ui-bg-blur));
+  transform: scale(1.05);
+  /* Prevent edge bleed from blur */
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ui-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--ui-bg-dim));
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ui-page>* {
+  position: relative;
+  z-index: 1;
+}
+
+/* ✅ Button Classes */
+.ui-btn-primary {
+  height: var(--ui-btn-height);
+  padding: 0 var(--ui-btn-pad-x);
+  border-radius: var(--ui-btn-radius);
+  border: none;
+  background: var(--ui-primary);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: var(--ui-btn-shadow);
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ui-btn-primary:active {
+  transform: scale(calc(1 - (0.02 * var(--ui-tap-anim))));
+  opacity: 0.95;
+}
+
+.ui-btn-ghost {
+  height: var(--ui-btn-height);
+  padding: 0 var(--ui-btn-pad-x);
+  border-radius: var(--ui-btn-radius);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ui-text);
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* Scrollbar styling for sidebar */

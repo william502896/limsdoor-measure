@@ -8,6 +8,7 @@ import { Search, Plus, Edit, MoreVertical, X, Save } from "lucide-react";
 export default function PartnersPage() {
     const [partners, setPartners] = useState<Partner[]>([]);
     const [loading, setLoading] = useState(true);
+    const [setupNeeded, setSetupNeeded] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -17,25 +18,106 @@ export default function PartnersPage() {
         status: 'active'
     });
 
+    // ...
+
     const fetchPartners = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from("partners")
-            .select("*")
-            .order("created_at", { ascending: false });
-
-        if (error) {
+        setSetupNeeded(false);
+        try {
+            const res = await fetch("/api/admin/partners");
+            const json = await res.json();
+            if (!res.ok || !json.ok) {
+                if (
+                    json.error?.includes("relation") ||
+                    json.error?.includes("does not exist") ||
+                    json.error?.includes("Could not find the table")
+                ) {
+                    setSetupNeeded(true);
+                    setLoading(false);
+                    return;
+                }
+                throw new Error(json.error);
+            }
+            setPartners(json.data || []);
+        } catch (error) {
             console.error("Error fetching partners:", error);
-            // Fallback for demo if table missing? No, let's assume user runs SQL.
-        } else {
-            setPartners(data || []);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
+
+    // ...
+
+    // ...
 
     useEffect(() => {
         fetchPartners();
     }, []);
+
+    if (setupNeeded) {
+        return (
+            <div className="p-8 max-w-4xl mx-auto">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
+                    <h2 className="text-xl font-bold text-amber-800 mb-2">⚠️ 테이블 생성 필요</h2>
+                    <p className="text-amber-700 mb-4">
+                        데이터베이스에 <strong>partners</strong> 테이블이 존재하지 않습니다.
+                        <br />아래 SQL을 Supabase SQL Editor에서 실행하여 테이블을 생성해주세요.
+                    </p>
+
+                    <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto relative group">
+                        <pre className="text-xs text-indigo-300 font-mono leading-relaxed">
+                            {`-- Create Partners Table
+create table if not exists public.partners (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  name text not null,
+  business_number text,
+  contact_name text,
+  contact_phone text,
+  address text,
+  type text default 'both',
+  status text default 'active',
+  memo text
+);
+
+alter table public.partners enable row level security;`}
+                        </pre>
+                        <button
+                            className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white text-xs px-2 py-1 rounded transition"
+                            onClick={() => navigator.clipboard.writeText(`create table if not exists public.partners (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  name text not null,
+  business_number text,
+  contact_name text,
+  contact_phone text,
+  address text,
+  type text default 'both',
+  status text default 'active',
+  memo text
+);
+alter table public.partners enable row level security;`)}
+                        >
+                            Copy SQL
+                        </button>
+                    </div>
+
+                    <div className="mt-6 flex justify-end">
+                        <button
+                            onClick={fetchPartners}
+                            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-bold transition"
+                        >
+                            생성 완료 (새로고침)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ... existing return ...
+
+
 
     const handleOpenModal = (partner?: Partner) => {
         if (partner) {
@@ -114,8 +196,8 @@ export default function PartnersPage() {
                                         <td className="px-6 py-4">
                                             <div className="font-bold text-slate-900">{p.name}</div>
                                             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${p.type === 'supplier' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                                                    p.type === 'customer' ? 'bg-green-50 text-green-600 border-green-200' :
-                                                        'bg-purple-50 text-purple-600 border-purple-200'
+                                                p.type === 'customer' ? 'bg-green-50 text-green-600 border-green-200' :
+                                                    'bg-purple-50 text-purple-600 border-purple-200'
                                                 }`}>
                                                 {p.type === 'supplier' ? '매입처' : p.type === 'customer' ? '매출처' : '매입/매출'}
                                             </span>

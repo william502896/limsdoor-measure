@@ -2,13 +2,28 @@
 
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Eye, Camera, Check, AlertTriangle, Send, Smartphone } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search, X, Youtube, Instagram, Facebook, Globe, ShoppingBag, Eye, Camera, Check, AlertTriangle, Send, Smartphone, Mic, Settings, Volume2, MicOff, Languages, MapPin } from "lucide-react";
+import VoiceInput from "@/app/components/VoiceInput";
+import NaverMapPicker from "@/app/components/NaverMapPicker";
+import { ParsedMeasurement } from "@/app/lib/voiceMeasurement";
+
+// TikTok Icon Component
+function TikTokIcon({ size = 20, className = "" }: { size?: number, className?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.394 6.394 0 0 0-5.394 5.394 6.395 6.395 0 0 0 6.394 6.394 6.395 6.395 0 0 0 6.394-6.394v-6.165a8.32 8.32 0 0 0 4.847 1.428V6.687h-.008a4.792 4.792 0 0 1 .008-.001z" />
+        </svg>
+    );
+}
 import { useGlobalStore } from "@/app/lib/store-context";
+import { createSupabaseBrowser } from "@/app/lib/supabaseClient"; // NEW
 import DoorModel, { DoorType, FrameColor, GlassType } from "@/app/components/Shop/AR/DoorModel";
 import { usePriceSystem } from "@/app/hooks/usePriceSystem";
 import { useFieldAI, AnalysisResult } from "@/app/hooks/useFieldAI"; // NEW
 import AIValidationModal from "@/app/components/Field/AIValidationModal"; // NEW
+import { useTheme } from "@/app/components/providers/ThemeProvider";
 import PayhereLinkPaymentBox from "@/app/components/PayhereLinkPaymentBox"; // NEW Payment
+import TranslatePanel from "@/app/components/TranslatePanel"; // NEW Translation
 import { calculateMisoCost, mapGlassToGroup, MisoProductType, DoorSpec } from "@/app/lib/miso_cost_data"; // Miso Logic
 
 // --- Miso Helper ---
@@ -27,7 +42,20 @@ function mapToMisoType(category: string, detail: string): MisoProductType | null
     return null;
 }
 
+// WALKIETALKIE HELPER
+function makeRoomId(prefix: string) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+
+    // @ts-ignore
+    const rand = (crypto?.randomUUID?.() || Math.random().toString(16).slice(2)).slice(0, 8);
+    return `${prefix}-${y}${m}${day}-${rand}`;
+}
+
 // --- Types ---
+
 type DoorCategory = "자동문" | "수동문" | "파티션";
 type SendTarget = "office" | "customer" | "both";
 type SlidingMode = "벽부형" | "오픈형";
@@ -119,6 +147,7 @@ function FieldCorrectionContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { orders, updateOrder } = useGlobalStore();
+    const { theme } = useTheme(); // Hook for Design System Overrides
 
     // Price Sync
     const { syncPrices, version, isSyncing, prices } = usePriceSystem();
@@ -163,7 +192,40 @@ function FieldCorrectionContent() {
     const [pendingTarget, setPendingTarget] = useState<SendTarget | null>(null); // NEW for AI Flow
     const [estimateId] = useState(() => `EST-${Date.now()}`); // Simple ID for payment
 
+    // Walkie Talkie State
+    const ROOM_KEY = "limsdoor_walkie_room_v1";
+    const NAME_KEY = "limsdoor_walkie_name_v1";
+    const [walkieRoomId, setWalkieRoomId] = useState<string>("");
+    const [walkieName, setWalkieName] = useState<string>("");
+
+    // Map Picker State
+    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [addressLat, setAddressLat] = useState<number | null>(null);
+    const [addressLng, setAddressLng] = useState<number | null>(null);
+    const [loadingGPS, setLoadingGPS] = useState(false);
+
     // --- Effects ---
+    // Walkie Talkie Init
+    useEffect(() => {
+        const savedRoom = localStorage.getItem(ROOM_KEY);
+        if (savedRoom) {
+            setWalkieRoomId(savedRoom);
+        } else {
+            const newRoom = makeRoomId("field");
+            localStorage.setItem(ROOM_KEY, newRoom);
+            setWalkieRoomId(newRoom);
+        }
+
+        // 이름(실측자) 자동 채움
+        const savedName = localStorage.getItem(NAME_KEY);
+        setWalkieName(savedName || "실측자");
+    }, []);
+
+    const saveWalkieName = (name: string) => {
+        setWalkieName(name);
+        localStorage.setItem(NAME_KEY, name);
+    };
+
     // 0. Handle AR Return Data
     useEffect(() => {
         if (!searchParams) return;
@@ -381,6 +443,139 @@ function FieldCorrectionContent() {
         return () => clearTimeout(timer);
     }, [warning]);
 
+    // --- Voice Input Handler ---
+    const handleApplyVoiceData = (data: ParsedMeasurement) => {
+        // Get current filled counts
+        const currentWidthCount = widthPoints.filter(p => p.trim() !== "").length;
+        const currentHeightCount = heightPoints.filter(p => p.trim() !== "").length;
+
+        // Apply width - find next empty slot
+        if (data.widthMm) {
+            setWidthPoints(prev => {
+                const next = [...prev];
+                const emptyIndex = next.findIndex(p => p.trim() === "");
+                if (emptyIndex !== -1) {
+                    next[emptyIndex] = String(data.widthMm);
+                } else {
+                    // Fallback to first slot if all filled
+                    next[0] = String(data.widthMm);
+                }
+                return next;
+            });
+        }
+
+        // Apply height - find next empty slot
+        if (data.heightMm) {
+            setHeightPoints(prev => {
+                const next = [...prev];
+                const emptyIndex = next.findIndex(p => p.trim() === "");
+                if (emptyIndex !== -1) {
+                    next[emptyIndex] = String(data.heightMm);
+                } else {
+                    // Fallback to first slot if all filled
+                    next[0] = String(data.heightMm);
+                }
+                return next;
+            });
+        }
+
+        // Apply door category
+        if (data.doorCategory) {
+            setCategory(data.doorCategory);
+            // Set default door type for category if not specified
+            if (!data.doorType) {
+                setDetail(DOOR_OPTIONS[data.doorCategory][0]);
+            }
+        }
+
+        // Apply door type (match with existing options)
+        if (data.doorType) {
+            const matchedType = DOOR_OPTIONS[category].find(
+                opt => opt.includes(data.doorType!) || data.doorType!.includes(opt)
+            );
+            if (matchedType) {
+                setDetail(matchedType);
+            }
+        }
+
+        // Apply glass type
+        if (data.glassType) {
+            setGlass(data.glassType);
+        }
+
+        // Apply open direction
+        if (data.openDirection) {
+            setOpenDirection(data.openDirection);
+        }
+
+        // Apply install location to memo
+        if (data.installLocation) {
+            setSiteMemo(prev => {
+                const locationText = `[시공위치: ${data.installLocation}]`;
+                return prev ? `${prev}\n${locationText}` : locationText;
+            });
+        }
+
+        // Add additional memo
+        if (data.memoAdd) {
+            setSiteMemo(prev => prev ? `${prev}\n${data.memoAdd}` : data.memoAdd!);
+        }
+    };
+
+    // --- Map Handler ---
+    const handleMapConfirm = (data: { address: string; lat: number; lng: number }) => {
+        setCustomerAddress(data.address);
+        setAddressLat(data.lat);
+        setAddressLng(data.lng);
+        setShowMapPicker(false);
+    };
+
+    // --- GPS Auto Address Handler ---
+    const handleAutoFillAddress = async () => {
+        if (!navigator.geolocation) {
+            alert("이 기기에서 위치 기능을 사용할 수 없습니다.");
+            return;
+        }
+
+        setLoadingGPS(true);
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                try {
+                    // Reverse geocoding to get address
+                    const res = await fetch(`/api/naver/reverse-geocoding?lat=${lat}&lng=${lng}`);
+                    const data = await res.json();
+
+                    if (data.ok && data.address) {
+                        setCustomerAddress(data.address);
+                        setAddressLat(lat);
+                        setAddressLng(lng);
+                        alert(`✅ 현재 위치 주소가 자동으로 입력되었습니다.`);
+                    } else {
+                        alert("주소를 찾을 수 없습니다. 수동으로 입력하거나 지도에서 선택해주세요.");
+                    }
+                } catch (error) {
+                    console.error("Reverse geocoding error:", error);
+                    alert("주소 조회 중 오류가 발생했습니다.");
+                } finally {
+                    setLoadingGPS(false);
+                }
+            },
+            (error) => {
+                setLoadingGPS(false);
+                let message = "위치 정보를 가져올 수 없습니다.";
+                if (error.code === 1) {
+                    message = "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
+                }
+                alert(message);
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+    };
+
     // --- Handlers ---
     const onPickFiles = (files: FileList | null) => {
         if (!files) return;
@@ -571,6 +766,223 @@ function FieldCorrectionContent() {
     const fW = confirmedWidth || 0;
     const fH = confirmedHeight || 0;
 
+    // --- LANDING PAGE STATE ---
+    const [step, setStep] = useState<"LANDING" | "FORM">("LANDING");
+
+    // Company Info State for Landing
+    const [companyLinks, setCompanyLinks] = useState<{
+        home?: string;
+        mall?: string;
+        youtube?: string;
+        tiktok?: string;
+        instagram?: string;
+        facebook?: string;
+    } | null>(null);
+    const supabase = useMemo(() => createSupabaseBrowser(), []); // Ensure client exists
+
+    // Auto-skip landing if returning from AR
+    useEffect(() => {
+        if (searchParams?.has("width") || searchParams?.has("height")) {
+            setStep("FORM");
+        }
+    }, [searchParams]);
+
+    // Fetch Company Links for Landing
+    useEffect(() => {
+        if (step !== "LANDING") return;
+
+        async function fetchLinks() {
+            try {
+                // 1. User/Cookie Check
+                const { data: { user } } = await supabase.auth.getUser();
+                let companyId = null;
+
+                if (user) {
+                    const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single();
+                    companyId = profile?.company_id;
+                }
+
+                if (!companyId) {
+                    const cookie = document.cookie.split('; ').find(row => row.startsWith('company_id='));
+                    if (cookie) companyId = cookie.split('=')[1];
+                }
+
+                if (companyId === 'demo') {
+                    setCompanyLinks({
+                        home: "https://example.com",
+                        mall: "https://smartstore.naver.com",
+                        youtube: "https://youtube.com",
+                        instagram: "https://instagram.com",
+                        tiktok: "https://tiktok.com",
+                        facebook: "https://facebook.com"
+                    });
+                    return;
+                }
+
+                if (companyId) {
+                    const { data } = await supabase
+                        .from('회사들')
+                        .select('"홈페이지", "쇼핑몰", "유튜브", "틱톡", "인스타그램", "페이스북"')
+                        .eq('id', companyId)
+                        .single();
+
+                    if (data) {
+                        const row = data as any;
+                        const h = row['홈페이지']?.[0];
+                        const m = row['쇼핑몰']?.[0];
+                        setCompanyLinks({
+                            home: h,
+                            mall: m,
+                            youtube: row['유튜브'],
+                            tiktok: row['틱톡'],
+                            instagram: row['인스타그램'],
+                            facebook: row['페이스북']
+                        });
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        fetchLinks();
+    }, [step]);
+
+    if (step === "LANDING") {
+        const defaultBg = "url('https://images.unsplash.com/photo-1595846519845-68e298c2edd8?q=80&w=2574&auto=format&fit=crop')";
+        const activeBg = theme?.background?.appBgImageUrl ? `url('${theme.background.appBgImageUrl}')` : defaultBg;
+
+        return (
+            <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+                {/* Background Image: Dynamic or Default */}
+                <div
+                    className="absolute inset-0 bg-cover bg-center opacity-70 transition-all duration-500"
+                    style={{ backgroundImage: activeBg }}
+                ></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent"></div>
+
+                <div className="relative z-10 w-full max-w-sm flex flex-col items-center text-center">
+                    {/* Icon uses Primary Color */}
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-primary/30 animate-in zoom-in duration-500 bg-[var(--ui-primary)] text-white">
+                        <span className="text-3xl">📐</span>
+                    </div>
+
+                    <h1 className="text-4xl font-black text-white mb-2 tracking-tight">현장 실측</h1>
+                    <p className="text-slate-300 mb-10 font-medium">정확한 측정이 완벽한 시공을 만듭니다.</p>
+
+                    <div className="w-full space-y-3 mb-8">
+                        {/* Button uses White BG + Primary Text (Original Look) */}
+                        <button
+                            onClick={() => setStep("FORM")}
+                            className="w-full py-4 bg-white rounded-btn-custom font-bold text-lg shadow-xl hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-2 group"
+                            style={{
+                                borderRadius: 'var(--ui-btn-radius)',
+                                color: 'var(--ui-primary)'
+                            }}
+                        >
+                            <span>실측 입력 시작하기</span>
+                            <ArrowLeft className="rotate-180 group-hover:translate-x-1 transition-transform" size={20} />
+                        </button>
+
+                        <button
+                            onClick={() => alert("🚧 [서비스 준비중] 🚧\n\n블루투스 레이저 거리측정기 연동 기능이 곧 제공됩니다.\n버튼 한 번으로 치수가 자동 입력되는 놀라운 경험을 기대해주세요!")}
+                            className="w-full py-3 bg-slate-800/50 backdrop-blur border border-slate-700 text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-800/80 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                            <span className="text-blue-400">⚡</span>
+                            <span>블루투스 기기 연결</span>
+                            <span className="bg-blue-900/50 text-blue-200 text-[10px] px-1.5 py-0.5 rounded border border-blue-500/30">New</span>
+                        </button>
+                    </div>
+
+                    {/* Quick Access Links */}
+                    <div className="grid grid-cols-4 gap-2 w-full">
+                        {/* Invite Consumer (New Feature) */}
+                        <button
+                            onClick={() => openSmsComposer("", `[LimsDoor] 우리집 현관문 미리보기 & 견적내기: ${window.location.origin}/shop`)}
+                            className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 backdrop-blur hover:bg-blue-600/30 transition text-blue-100"
+                        >
+                            <Send size={22} />
+                            <span className="text-[10px] font-bold">소비자 초대</span>
+                        </button>
+                        {/* Portfolio (Internal) */}
+                        <button
+                            onClick={() => window.open("/shop/portfolio", "_blank")}
+                            className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50 backdrop-blur hover:bg-slate-700/60 transition"
+                        >
+                            <Search size={22} className="text-indigo-300" />
+                            <span className="text-[10px] text-slate-300 font-bold">포트폴리오</span>
+                        </button>
+
+                        {/* Homepage */}
+                        <button
+                            onClick={() => companyLinks?.home ? window.open(companyLinks.home, "_blank") : null}
+                            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border backdrop-blur transition ${companyLinks?.home ? 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-700/60' : 'border-transparent opacity-30 grayscale cursor-default'}`}
+                        >
+                            <Globe size={22} className="text-emerald-300" />
+                            <span className="text-[10px] text-slate-300 font-bold">홈페이지</span>
+                        </button>
+
+                        {/* Mall */}
+                        <button
+                            onClick={() => companyLinks?.mall ? window.open(companyLinks.mall, "_blank") : null}
+                            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border backdrop-blur transition ${companyLinks?.mall ? 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-700/60' : 'border-transparent opacity-30 grayscale cursor-default'}`}
+                        >
+                            <ShoppingBag size={22} className="text-orange-300" />
+                            <span className="text-[10px] text-slate-300 font-bold">쇼핑몰</span>
+                        </button>
+
+                        {/* YouTube */}
+                        {companyLinks?.youtube && (
+                            <button
+                                onClick={() => window.open(companyLinks.youtube, "_blank")}
+                                className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-red-600/20 border border-red-500/30 backdrop-blur hover:bg-red-600/30 transition text-red-100"
+                            >
+                                <Youtube size={22} />
+                                <span className="text-[10px] font-bold">유튜브</span>
+                            </button>
+                        )}
+
+                        {/* Instagram */}
+                        {companyLinks?.instagram && (
+                            <button
+                                onClick={() => window.open(companyLinks.instagram, "_blank")}
+                                className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-pink-600/20 border border-pink-500/30 backdrop-blur hover:bg-pink-600/30 transition text-pink-100"
+                            >
+                                <Instagram size={22} />
+                                <span className="text-[10px] font-bold">인스타</span>
+                            </button>
+                        )}
+
+                        {/* TikTok */}
+                        {companyLinks?.tiktok && (
+                            <button
+                                onClick={() => window.open(companyLinks.tiktok, "_blank")}
+                                className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50 backdrop-blur hover:bg-slate-700/60 transition"
+                            >
+                                <TikTokIcon size={20} className="text-slate-200" />
+                                <span className="text-[10px] text-slate-300 font-bold">틱톡</span>
+                            </button>
+                        )}
+
+                        {/* Facebook */}
+                        {companyLinks?.facebook && (
+                            <button
+                                onClick={() => window.open(companyLinks.facebook, "_blank")}
+                                className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 backdrop-blur hover:bg-blue-600/30 transition text-blue-100"
+                            >
+                                <Facebook size={22} />
+                                <span className="text-[10px] font-bold">페이스북</span>
+                            </button>
+                        )}
+                    </div>
+
+                    <p className="mt-8 text-[10px] text-slate-500">
+                        LIMSDOOR MEASURE APP v{version || "1.0"}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-slate-50 pb-32 font-sans text-slate-900">
             {/* Header */}
@@ -603,6 +1015,13 @@ function FieldCorrectionContent() {
                         AR 실측
                     </button>
                     <button
+                        onClick={() => document.getElementById("translate-section")?.scrollIntoView({ behavior: "smooth" })}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold border border-orange-100 transition active:scale-95"
+                    >
+                        <Languages size={14} />
+                        번역
+                    </button>
+                    <button
                         onClick={() => setShowComparisonModal(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-100 transition active:scale-95"
                     >
@@ -632,11 +1051,69 @@ function FieldCorrectionContent() {
                                 value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="예: 010-1234-5678" />
                         </label>
                         <label className="block sm:col-span-2">
-                            <span className="text-xs font-bold text-slate-500 block mb-1">여건 주소</span>
+                            <span className="text-xs font-bold text-slate-500 block mb-1 flex items-center justify-between">
+                                <span>여건 주소</span>
+                                <div className="flex gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoFillAddress}
+                                        disabled={loadingGPS}
+                                        className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                                        title="현재 위치의 주소로 자동 입력"
+                                    >
+                                        {loadingGPS ? "📍 가져오는 중..." : "📍 현재 위치"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMapPicker(true)}
+                                        className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
+                                    >
+                                        <MapPin size={12} />
+                                        지도에서 선택
+                                    </button>
+                                </div>
+                            </span>
                             <input className="w-full text-sm p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
                                 value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="예: 구리시 한양아파트" />
+                            {addressLat && addressLng && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                    📍 위도: {addressLat.toFixed(6)}, 경도: {addressLng.toFixed(6)}
+                                </p>
+                            )}
                         </label>
                     </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 shadow-sm">
+                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b pb-2">
+                        <span className="w-1.5 h-4 bg-green-600 rounded-full"></span>
+                        현장 통신 (무전기)
+                    </h2>
+
+                    <div className="bg-slate-50 p-4 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm mb-1">실측팀 전용 채널 (CH 2)</div>
+                            <div className="text-xs text-slate-500">
+                                현장 상황 공유 및 문의<br />
+                                <span className="text-indigo-600">* 별도 탭에서 실행됩니다.</span>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => window.open("/radio?channel=2&locked=true", "_blank")}
+                            className="bg-indigo-600/10 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-3 rounded-xl text-sm font-bold border border-indigo-200 hover:border-indigo-600 transition flex items-center gap-2"
+                        >
+                            <Mic size={16} />
+                            무전기 켜기
+                        </button>
+                    </div>
+                </section>
+
+                <section id="translate-section" className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 shadow-sm">
+                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b pb-2">
+                        <span className="w-1.5 h-4 bg-indigo-600 rounded-full"></span>
+                        현장 번역 (Foreigner Support)
+                    </h2>
+                    <TranslatePanel onInsertToMemo={(t) => setSiteMemo(prev => prev ? prev + "\n\n" + t : t)} />
                 </section>
 
                 {/* 2. Options (Moved ABOVE Measurements per request) */}
@@ -757,6 +1234,16 @@ function FieldCorrectionContent() {
                         </div>
                     </div>
                 </section>
+
+                {/* Voice Input Section - NEW */}
+                <VoiceInput
+                    onApplyMeasurement={handleApplyVoiceData}
+                    currentDoorType={detail}
+                    currentMeasurementCounts={{
+                        width: widthPoints.filter(p => p.trim() !== "").length,
+                        height: heightPoints.filter(p => p.trim() !== "").length
+                    }}
+                />
 
                 {/* 4. Measurements (Moved Down) */}
                 <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 shadow-sm">
@@ -963,7 +1450,7 @@ function FieldCorrectionContent() {
                     <div className="bg-slate-100 w-full max-w-lg h-[85vh] sm:h-auto sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl">
                         <div className="bg-white border-b p-4 flex justify-between items-center">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Eye size={18} className="text-indigo-600" /> 데이터 비교</h3>
-                            <button onClick={() => setShowComparisonModal(false)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full"><ArrowLeft size={20} className="-rotate-90 sm:rotate-0" /></button>
+                            <button onClick={() => setShowComparisonModal(false)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800"><X size={24} /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-4">
                             {/* Visual Overlay */}
@@ -994,6 +1481,15 @@ function FieldCorrectionContent() {
                 </div>
             )}
 
+
+            {/* Map Picker Modal */}
+            {showMapPicker && (
+                <NaverMapPicker
+                    onConfirm={handleMapConfirm}
+                    onClose={() => setShowMapPicker(false)}
+                    initialAddress={customerAddress}
+                />
+            )}
         </div>
     );
 }

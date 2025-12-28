@@ -6,7 +6,8 @@ import ManageLayout from "../components/Manage/Layout/ManageLayout";
 import CustomerList from "@/app/components/Manage/CustomerList";
 import CustomerDetail from "@/app/components/Manage/CustomerDetail";
 import AnalyticsDashboard from "@/app/components/Manage/AnalyticsDashboard";
-import RadioUserList from "@/app/components/Manage/RadioUserList"; // NEW IMPORT
+import RadioUserList from "@/app/components/Manage/RadioUserList";
+import DispatchConsole from "@/app/components/Manage/DispatchConsole"; // NEW IMPORT
 
 function ManageContent() {
     const searchParams = useSearchParams();
@@ -23,6 +24,7 @@ function ManageContent() {
     const getTitle = () => {
         switch (view) {
             case "dashboard": return "대시보드";
+            case "dispatch": return "배차 관제 센터";
             case "customer": return "고객 관리";
             case "contract": return "계약 / 견적 관리";
             case "as": return "AS / 하자 관리";
@@ -58,6 +60,7 @@ function ManageContent() {
             )}
 
             {view === "radio" && <RadioUserList />}
+            {view === "dispatch" && <DispatchConsole />}
 
             {/* Placeholders for other views */}
             {["contract", "as", "voice", "reports", "settings"].includes(view) && (

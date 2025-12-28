@@ -39,8 +39,12 @@ export default function RadioUserList() {
                 setUsers(data.users);
             } else {
                 console.error(data.error);
-                // Temporary debug: alert user of fetch error
-                alert("리스트 불러오기 실패: " + data.error);
+                // Improved error message
+                if (data.error === "UNAUTHORIZED") {
+                    alert("🔒 관리자 인증이 필요합니다.\n\n대시보드에서 [설정 아이콘]을 클릭하여 1티어 관리자로 로그인 후 다시 시도해주세요.");
+                } else {
+                    alert("리스트 불러오기 실패: " + data.error);
+                }
             }
         } catch (e) {
             console.error("Failed to fetch radio users", e);
@@ -252,8 +256,8 @@ export default function RadioUserList() {
                     <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <h3 className="font-bold text-gray-800">사용자 수동 등록</h3>
-                            <button onClick={() => setIsRegisterOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
+                            <button onClick={() => setIsRegisterOpen(false)} className="p-2 -mr-2 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition">
+                                <X size={24} />
                             </button>
                         </div>
                         <form onSubmit={handleRegister} className="p-6 space-y-4">

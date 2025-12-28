@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     }
 
     // 2. Auth Check (Only for real DB)
-    if (!isAdminRequest(req)) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+    if (!(await isAdminRequest(req))) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
     const { data, error } = await supabase
         .from("radio_users")
@@ -48,7 +48,7 @@ export async function PATCH(req: Request) {
     }
 
     // 2. Auth Check (only for real DB)
-    if (!isAdminRequest(req)) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+    if (!(await isAdminRequest(req))) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const parsed = patchSchema.safeParse(body);

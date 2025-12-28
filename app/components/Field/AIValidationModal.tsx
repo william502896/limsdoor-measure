@@ -18,22 +18,27 @@ export default function AIValidationModal({ result, onClose, onProceed }: AIVali
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className={`px-6 py-5 flex items-center gap-3 ${isCritical ? "bg-red-50 text-red-700" :
-                        isWarning ? "bg-amber-50 text-amber-700" :
-                            "bg-green-50 text-green-700"
+                <div className={`px-6 py-5 flex justify-between items-start ${isCritical ? "bg-red-50 text-red-700" :
+                    isWarning ? "bg-amber-50 text-amber-700" :
+                        "bg-green-50 text-green-700"
                     }`}>
-                    {isCritical ? <AlertOctagon size={28} className="shrink-0" /> :
-                        isWarning ? <AlertTriangle size={28} className="shrink-0" /> :
-                            <CheckCircle size={28} className="shrink-0" />}
+                    <div className="flex items-center gap-3">
+                        {isCritical ? <AlertOctagon size={28} className="shrink-0" /> :
+                            isWarning ? <AlertTriangle size={28} className="shrink-0" /> :
+                                <CheckCircle size={28} className="shrink-0" />}
 
-                    <div>
-                        <h3 className="font-bold text-lg leading-tight">
-                            {isCritical ? "실측 데이터 위험 감지" :
-                                isWarning ? "실측 데이터 주의" :
-                                    "실측 데이터 정상"}
-                        </h3>
-                        <p className="text-xs opacity-80 mt-1">AI 신뢰도 {result.confidence}%</p>
+                        <div>
+                            <h3 className="font-bold text-lg leading-tight">
+                                {isCritical ? "실측 데이터 위험 감지" :
+                                    isWarning ? "실측 데이터 주의" :
+                                        "실측 데이터 정상"}
+                            </h3>
+                            <p className="text-xs opacity-80 mt-1">AI 신뢰도 {result.confidence}%</p>
+                        </div>
                     </div>
+                    <button onClick={onClose} className="p-1 -mr-2 -mt-1 rounded-full hover:bg-black/10 transition opacity-60 hover:opacity-100">
+                        <X size={24} />
+                    </button>
                 </div>
 
                 {/* Body */}

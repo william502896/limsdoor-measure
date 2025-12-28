@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, X, Maximize2, Minimize2, Terminal } from "lucide-react";
+import { Send, Bot, X, Maximize2, Terminal, Mic, MicOff } from "lucide-react";
 
 type Message = {
     role: "system" | "user" | "assistant" | "tool";
@@ -9,12 +9,70 @@ type Message = {
     tool_calls?: any[];
 };
 
-export default function DashboardChatWidget() {
-    const [isOpen, setIsOpen] = useState(false);
+interface DashboardChatWidgetProps {
+    externalOpen?: boolean;
+    onClose?: () => void;
+}
+
+export default function DashboardChatWidget({ externalOpen, onClose }: DashboardChatWidgetProps) {
+    const [internalOpen, setInternalOpen] = useState(false);
+
+    // Resolve isOpen
+    const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+    const handleClose = () => {
+        if (onClose) onClose();
+        else setInternalOpen(false);
+    };
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Voice State
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<any>(null);
+
+    useEffect(() => {
+        // Initialize Speech Recognition
+        if (typeof window !== "undefined") {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognitionRef.current = new SpeechRecognition();
+                recognitionRef.current.continuous = false;
+                recognitionRef.current.lang = "ko-KR";
+                recognitionRef.current.interimResults = false;
+
+                recognitionRef.current.onresult = (event: any) => {
+                    const transcript = event.results[0][0].transcript;
+                    setInput(prev => prev + (prev ? " " : "") + transcript);
+                    setIsListening(false);
+                    // Optional: Auto-send?
+                };
+                recognitionRef.current.onerror = (event: any) => {
+                    console.error("Speech Error", event.error);
+                    setIsListening(false);
+                    alert("음성 인식 오류: " + event.error);
+                };
+                recognitionRef.current.onend = () => {
+                    setIsListening(false);
+                };
+            }
+        }
+    }, []);
+
+    const toggleVoice = () => {
+        if (!recognitionRef.current) {
+            alert("이 브라우저는 음성 인식을 지원하지 않습니다.");
+            return;
+        }
+        if (isListening) {
+            recognitionRef.current.stop();
+        } else {
+            recognitionRef.current.start();
+            setIsListening(true);
+        }
+    };
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -54,9 +112,14 @@ export default function DashboardChatWidget() {
     };
 
     if (!isOpen) {
+        // If controlled externally and closed, don't render floating button unless intended?
+        // User wants button in Header.
+        // So if externalOpen is provided (false), we typically hide everything or render nothing.
+        if (externalOpen !== undefined) return null;
+
         return (
             <button
-                onClick={() => setIsOpen(true)}
+                onClick={() => setInternalOpen(true)}
                 className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 rounded-full shadow-lg shadow-indigo-500/40 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-110 transition-all z-50 group"
             >
                 <Bot size={28} className="group-hover:animate-bounce" />
@@ -79,7 +142,7 @@ export default function DashboardChatWidget() {
                     <button onClick={() => window.open("/admin/agent", "_blank")} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white" title="Expand">
                         <Maximize2 size={14} />
                     </button>
-                    <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white">
+                    <button onClick={handleClose} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white">
                         <X size={14} />
                     </button>
                 </div>
@@ -137,6 +200,17 @@ export default function DashboardChatWidget() {
                             }
                         }}
                     />
+
+                    {/* Voice Button */}
+                    <button
+                        type="button"
+                        onClick={toggleVoice}
+                        className={`absolute right-10 bottom-2.5 p-1.5 rounded-md transition-colors ${isListening ? "bg-red-500 text-white animate-pulse" : "text-slate-400 hover:text-white"}`}
+                        title={isListening ? "음성 인식 중지" : "음성 입력 시작"}
+                    >
+                        {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                    </button>
+
                     <button
                         type="submit"
                         disabled={!input.trim() || loading}

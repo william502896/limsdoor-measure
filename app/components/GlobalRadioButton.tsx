@@ -23,9 +23,8 @@ export default function GlobalRadioButton() {
         }
     }, []);
 
-    // Return null if hidden 
     // Hidden on: /radio (itself), /shop (consumer view?), / (home?) -> as per previous logic
-    if (pathname === '/radio') return null;
+
 
     // --- MOUSE HANDLERS ---
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -122,6 +121,12 @@ export default function GlobalRadioButton() {
     const style: React.CSSProperties = position
         ? { position: 'fixed', left: position.x, top: position.y, zIndex: 9999, touchAction: 'none' }
         : { position: 'fixed', top: 80, right: 20, zIndex: 9999, opacity: 0 }; // Hide until mounted/positioned
+
+    // Return null if hidden 
+    // Hidden on: /radio (itself), /shop (consumer view?), / (home?) -> as per previous logic
+    // Return null if hidden 
+    // Hidden on: /radio (itself) and /admin (dashboards)
+    if (pathname === '/radio' || pathname.startsWith('/admin')) return null;
 
     return (
         <div

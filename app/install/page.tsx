@@ -725,7 +725,14 @@ export default function InstallPage() {
                             </h1>
                         </div>
                     </div>
-                    {/* Top Right Actions (if any) */}
+                    {/* Top Right Actions */}
+                    <button
+                        onClick={() => window.open("/radio?channel=3&locked=true", "_blank")}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 transition active:scale-95 hover:bg-indigo-100"
+                    >
+                        <Phone size={14} /> // Using Phone icon as placeholder for Mic if needed
+                        무전기 (CH 3)
+                    </button>
                 </header>
 
                 {/* Main Navigation Tabs */}
