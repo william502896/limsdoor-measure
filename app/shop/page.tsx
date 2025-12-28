@@ -7,6 +7,9 @@ import { createSupabaseBrowser } from "@/app/lib/supabaseClient";
 import { useTheme } from "@/app/components/providers/ThemeProvider";
 import { TRANSLATIONS, LANGUAGES, Language } from "@/app/lib/i18n";
 
+// Force dynamic rendering to avoid SSR issues
+export const dynamic = 'force-dynamic';
+
 // TikTok Icon Component (Shared style)
 function TikTokIcon({ size = 20, className = "" }: { size?: number, className?: string }) {
     return (
