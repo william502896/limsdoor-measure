@@ -278,7 +278,10 @@ function AdminDesignPageContent() {
         if (section === "brandName" || section === "headerTitle" || section === "preset") {
             (next as any)[section] = value;
         } else {
-            (next as any)[section] = { ...next[section], [key]: value };
+            const currentSection = next[section];
+            if (currentSection && typeof currentSection === 'object') {
+                (next as any)[section] = { ...currentSection, [key]: value };
+            }
         }
         updateSettings(next);
     };
