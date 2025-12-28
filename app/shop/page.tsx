@@ -26,10 +26,14 @@ export default function ShopLandingPage() {
 
     const changeLang = (l: Language) => {
         setLang(l);
-        localStorage.setItem("limsdoor_lang", l);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem("limsdoor_lang", l);
+        }
     };
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
         const saved = localStorage.getItem("limsdoor_lang") as Language;
         if (saved && TRANSLATIONS[saved]) {
             setLang(saved);
