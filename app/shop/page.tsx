@@ -67,7 +67,7 @@ export default function ShopLandingPage() {
                 }
 
                 // 2. Fallback to Cookie (for Demo or Guests with cookie)
-                if (!companyId) {
+                if (!companyId && typeof window !== 'undefined') {
                     const cookie = document.cookie.split('; ').find(row => row.startsWith('company_id='));
                     if (cookie) companyId = cookie.split('=')[1];
                 }
