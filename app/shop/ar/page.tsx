@@ -1,553 +1,648 @@
 "use client";
 
-import React, { useRef, useEffect, useState, Suspense } from "react";
-import { useRouter } from "next/navigation";
-import { Camera, ArrowLeft, Check, AlertTriangle, Wand2 } from "lucide-react";
-import { useGlobalStore } from "../../lib/store-context";
-import styles from "./ar.module.css";
-import DoorModel, { DoorType, FrameColor, GlassType } from "@/app/components/Shop/AR/DoorModel";
-import { useConsumerAI, Recommendation } from "@/app/hooks/useConsumerAI"; // NEW
-import AICoachOverlay from "@/app/components/Shop/AICoachOverlay"; // NEW
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// --- Constants ---
-const FRAME_COLORS: Record<FrameColor, string> = {
-    "화이트": "#ffffff",
-    "블랙": "#1f2937",
-    "샴페인골드": "#d4af37",
-    "네이비": "#1e3a8a"
-};
+/**
+ * ✅ 림스도어 실측앱 "도어 합성" (사진 + 도어 PNG) 퍼스펙티브(원근) 합성
+ * - 사진 업로드
+ * - 도어 PNG 선택
+ * - 4점(좌상/우상/우하/좌하) 드래그 지정
+ * - 캔버스에서 퍼스펙티브 워핑 후 합성
+ * - 결과 다운로드
+ *
+ * ✅ 주의:
+ * - 도어 PNG는 반드시 투명배경(알파)여야 가장 깔끔합니다.
+ * - 모바일에서도 동작하도록 포인터 이벤트(pointerdown/move/up) 사용
+ */
 
-// Standard Dimensions for calculation
-const STD_WIDTH = 1250; // mm
-const STD_HEIGHT = 2100; // mm
+/* ===============================
+   Door assets (public/doors)
+================================ */
+type DoorAsset = { id: string; label: string; src: string };
 
-function ShopArContent() {
-    const router = useRouter();
-    const { addOrder, user } = useGlobalStore();
+const DOORS: DoorAsset[] = [
+    { id: "3t_black_clear", label: "3연동 | 블랙 | 투명강화", src: "/doors/3t_black_clear.png" },
+    { id: "oneslide_white_satin", label: "원슬라이딩 | 화이트 | 샤틴", src: "/doors/oneslide_white_satin.png" },
+    // 필요하면 계속 추가
+];
 
-    // AI Hooks
-    const { analyze, getRecommendations, createConsultationRequest, matchStyle } = useConsumerAI(); // NEW
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+type Pt = { x: number; y: number };
 
-    // --- State Management ---
-    // Workflow Steps: 'select' -> 'calibrate' -> 'scan' -> 'placed'
-    type ARStep = "select" | "calibrate" | "scan" | "placed";
-    const [step, setStep] = useState<ARStep>("select");
-    const [isOpen, setIsOpen] = useState(false);
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
 
-    // Config State
-    const [doorType, setDoorType] = useState<DoorType>("3연동");
-    const [frameColor, setFrameColor] = useState<FrameColor>("화이트");
-    const [glassType, setGlassType] = useState<GlassType>("투명");
+function dist(a: Pt, b: Pt) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+}
 
-    // Geometric State
-    const [scale, setScale] = useState(1.0); // 1.0 = Calibration Start
-    const [posY, setPosY] = useState(0);
-    const [posX, setPosX] = useState(0);
+/** 3x3 행렬(호모그래피) 풀기 */
+function solveHomography(src: Pt[], dst: Pt[]) {
+    // src(도어 이미지 좌표) -> dst(캔버스 상 4점)
+    // unknowns: h11 h12 h13 h21 h22 h23 h31 h32 (h33=1)
+    // For each point:
+    // x' = (h11 x + h12 y + h13) / (h31 x + h32 y + 1)
+    // y' = (h21 x + h22 y + h23) / (h31 x + h32 y + 1)
+    // Build 8 equations.
+    const A: number[][] = [];
+    const b: number[] = [];
 
-    // Manual Size Corrections
-    const [widthMod, setWidthMod] = useState(0);
-    const [heightMod, setHeightMod] = useState(0);
+    for (let i = 0; i < 4; i++) {
+        const { x, y } = src[i];
+        const { x: u, y: v } = dst[i];
 
-    // Gyroscope
-    const [rotation, setRotation] = useState({ x: 0, y: 0 });
+        // u eq
+        A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]);
+        b.push(u);
 
-    // System State
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const [permission, setPermission] = useState<boolean | null>(null);
-    const [isMounted, setIsMounted] = useState(false);
+        // v eq
+        A.push([0, 0, 0, x, y, 1, -v * x, -v * y]);
+        b.push(v);
+    }
 
-    // Initial Mount Check (Prevent Hydration Mismatch)
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    const h = gaussianElimination(A, b); // length 8
+    const [h11, h12, h13, h21, h22, h23, h31, h32] = h;
+    return [
+        [h11, h12, h13],
+        [h21, h22, h23],
+        [h31, h32, 1],
+    ];
+}
 
-    // Calculated Dimensions
-    const calcWidth = Math.round((STD_WIDTH * scale) + widthMod);
-    const calcHeight = Math.round((STD_HEIGHT * scale) + heightMod);
+function gaussianElimination(A: number[][], b: number[]) {
+    // Solve A x = b for x
+    const n = b.length;
+    // Augment
+    const M = A.map((row, i) => [...row, b[i]]);
 
-    // Price
-    const basePrice = doorType === "원슬라이딩" ? 590000 : 690000;
-    const optionPrice = (glassType === "투명" ? 0 : 50000) + (frameColor === "화이트" ? 0 : 30000);
-    const totalPrice = basePrice + optionPrice;
-
-    // AI Helpers
-    const handleAIStyleMatch = async () => {
-        if (!videoRef.current) return;
-        setIsAnalyzing(true);
-        try {
-            // 1. Capture Frame
-            const canvas = document.createElement("canvas");
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(videoRef.current, 0, 0);
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-
-                // 2. Call AI
-                const result = await matchStyle(dataUrl);
-
-                // 3. Apply Config
-                if (result?.suggested_config) {
-                    const cfg = result.suggested_config;
-                    // Safety mapping
-                    if (cfg.glass) setGlassType(cfg.glass.replace("유리", "").trim() as any || "투명");
-                    if (cfg.frame_color) setFrameColor(cfg.frame_color as any || "화이트");
-                    // Door type logic could be complex, keeping current selection or mapping 'design' to type?
-                    // Let's assume user selected doorType (structure) but AI styles it.
-
-                    alert(`AI 제안: ${result.reasoning}\n\n설정된 스타일:\n컬러: ${cfg.frame_color}\n유리: ${cfg.glass}`);
-                    handlePlaceDoor();
-                }
-            }
-        } catch (e) {
-            alert("AI 분석 실패. 다시 시도해주세요.");
-            console.error(e);
-        } finally {
-            setIsAnalyzing(false);
+    for (let col = 0; col < 8; col++) {
+        // find pivot
+        let pivot = col;
+        for (let row = col + 1; row < n; row++) {
+            if (Math.abs(M[row][col]) > Math.abs(M[pivot][col])) pivot = row;
         }
-    };
+        // swap
+        [M[col], M[pivot]] = [M[pivot], M[col]];
 
-    // AI Analysis (Memoized)
-    const aiAnalysis = React.useMemo(() => analyze({
-        isPlaced: step === "placed",
-        isCalibrated: scale !== 1.0,
-        doorType
-    }), [step, scale, doorType]);
+        const diag = M[col][col];
+        if (Math.abs(diag) < 1e-12) throw new Error("Homography solve failed: singular matrix");
 
-    const recommendations = React.useMemo(() => getRecommendations(doorType), [doorType]);
+        // normalize pivot row
+        for (let j = col; j <= 8; j++) M[col][j] /= diag;
 
-    const handleApplyRecommendation = (rec: Recommendation) => {
-        setDoorType(rec.config.doorType as DoorType);
-        setFrameColor(rec.config.design as FrameColor || "화이트"); // Map design to frame color roughly
-        setGlassType(rec.config.glass as GlassType);
-    };
+        // eliminate others
+        for (let row = 0; row < n; row++) {
+            if (row === col) continue;
+            const factor = M[row][col];
+            for (let j = col; j <= 8; j++) M[row][j] -= factor * M[col][j];
+        }
+    }
 
-    const handleRequestConsult = () => {
-        const req = createConsultationRequest({ isPlaced: step === "placed", isCalibrated: true, doorType });
-        // In real app, send to API. For now, alert
-        alert(`상담이 접수되었습니다!\n[접수번호: ${req.requestedAt.slice(-6)}]`);
-    };
+    // solution
+    return M.slice(0, 8).map((row) => row[8]);
+}
 
-    const handleSaveQuote = () => {
-        const workflow = {
-            id: Date.now().toString(),
-            customerName: "AR 체험 고객", // Demo
-            status: "ESTIMATE",
-            items: [{
-                name: `${doorType} (${frameColor})`,
-                category: "door",
-                unit: "set",
-                scanData: { width: calcWidth, height: calcHeight },
-                price: totalPrice
-            }],
-            createdAt: new Date().toISOString()
-        };
-        addOrder(workflow as any);
-        alert("견적이 저장되었습니다.");
-        router.push("/manage");
-    };
+function invert3x3(m: number[][]) {
+    const a = m[0][0], b = m[0][1], c = m[0][2];
+    const d = m[1][0], e = m[1][1], f = m[1][2];
+    const g = m[2][0], h = m[2][1], i = m[2][2];
 
-    // --- Gyroscope Logic ---
+    const A = e * i - f * h;
+    const B = -(d * i - f * g);
+    const C = d * h - e * g;
+    const D = -(b * i - c * h);
+    const E = a * i - c * g;
+    const F = -(a * h - b * g);
+    const G = b * f - c * e;
+    const H = -(a * f - c * d);
+    const I = a * e - b * d;
+
+    const det = a * A + b * B + c * C;
+    if (Math.abs(det) < 1e-12) throw new Error("Matrix invert failed: det≈0");
+
+    const invDet = 1 / det;
+    return [
+        [A * invDet, D * invDet, G * invDet],
+        [B * invDet, E * invDet, H * invDet],
+        [C * invDet, F * invDet, I * invDet],
+    ];
+}
+
+function applyHomography(invH: number[][], p: Pt) {
+    // map dest -> src using inverse homography
+    const x = p.x, y = p.y;
+    const denom = invH[2][0] * x + invH[2][1] * y + invH[2][2];
+    const sx = (invH[0][0] * x + invH[0][1] * y + invH[0][2]) / denom;
+    const sy = (invH[1][0] * x + invH[1][1] * y + invH[1][2]) / denom;
+    return { x: sx, y: sy };
+}
+
+async function loadImage(src: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
+/**
+ * ✅ 퍼스펙티브 워핑 + 알파 합성
+ * - 배경(baseCtx)에 먼저 배경 이미지 그려두고
+ * - doorImg를 4점에 맞춰 warp하여 합성
+ */
+function warpAndComposite(
+    baseCanvas: HTMLCanvasElement,
+    doorImg: HTMLImageElement,
+    quad: Pt[],
+    opacity: number
+) {
+    const ctx = baseCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    const W = baseCanvas.width;
+    const H = baseCanvas.height;
+
+    // door source coords (door image rectangle)
+    const sw = doorImg.naturalWidth;
+    const sh = doorImg.naturalHeight;
+
+    const srcPts: Pt[] = [
+        { x: 0, y: 0 },       // TL
+        { x: sw, y: 0 },      // TR
+        { x: sw, y: sh },     // BR
+        { x: 0, y: sh },      // BL
+    ];
+
+    // dst quad coords on canvas
+    const dstPts = quad;
+
+    // compute H: src -> dst, then invert to map dest->src
+    const Hm = solveHomography(srcPts, dstPts);
+    const invH = invert3x3(Hm);
+
+    // bounding box of quad for speed
+    const minX = Math.floor(Math.min(...dstPts.map(p => p.x)));
+    const maxX = Math.ceil(Math.max(...dstPts.map(p => p.x)));
+    const minY = Math.floor(Math.min(...dstPts.map(p => p.y)));
+    const maxY = Math.ceil(Math.max(...dstPts.map(p => p.y)));
+
+    // door image pixels
+    const off = document.createElement("canvas");
+    off.width = sw;
+    off.height = sh;
+    const offCtx = off.getContext("2d", { willReadFrequently: true });
+    if (!offCtx) return;
+    offCtx.clearRect(0, 0, sw, sh);
+    offCtx.drawImage(doorImg, 0, 0);
+    const doorData = offCtx.getImageData(0, 0, sw, sh).data;
+
+    // base image data
+    const boxW = clamp(maxX - minX, 0, W);
+    const boxH = clamp(maxY - minY, 0, H);
+    if (boxW <= 0 || boxH <= 0) return;
+
+    const imgData = ctx.getImageData(0, 0, W, H);
+    const data = imgData.data;
+
+    const x0 = clamp(minX, 0, W - 1);
+    const x1 = clamp(maxX, 0, W - 1);
+    const y0 = clamp(minY, 0, H - 1);
+    const y1 = clamp(maxY, 0, H - 1);
+
+    // simple point-in-quad using barycentric-like method via triangles
+    function pointInQuad(p: Pt, q: Pt[]) {
+        // split quad into two triangles: (0,1,2) and (0,2,3)
+        return pointInTri(p, q[0], q[1], q[2]) || pointInTri(p, q[0], q[2], q[3]);
+    }
+    function sign(p1: Pt, p2: Pt, p3: Pt) {
+        return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+    }
+    function pointInTri(pt: Pt, v1: Pt, v2: Pt, v3: Pt) {
+        const d1 = sign(pt, v1, v2);
+        const d2 = sign(pt, v2, v3);
+        const d3 = sign(pt, v3, v1);
+        const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+        const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+        return !(hasNeg && hasPos);
+    }
+
+    // nearest sampling (빠름). 필요하면 bilinear로 바꾸면 품질↑
+    for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+            const p = { x, y };
+            if (!pointInQuad(p, dstPts)) continue;
+
+            const sp = applyHomography(invH, p);
+            const sx = Math.round(sp.x);
+            const sy = Math.round(sp.y);
+            if (sx < 0 || sy < 0 || sx >= sw || sy >= sh) continue;
+
+            const sIdx = (sy * sw + sx) * 4;
+            const sr = doorData[sIdx];
+            const sg = doorData[sIdx + 1];
+            const sb = doorData[sIdx + 2];
+            const sa = doorData[sIdx + 3] / 255;
+
+            if (sa <= 0.001) continue;
+
+            const a = clamp(sa * opacity, 0, 1);
+            const dIdx = (y * W + x) * 4;
+
+            // alpha blend: out = src*a + dst*(1-a)
+            data[dIdx] = Math.round(sr * a + data[dIdx] * (1 - a));
+            data[dIdx + 1] = Math.round(sg * a + data[dIdx + 1] * (1 - a));
+            data[dIdx + 2] = Math.round(sb * a + data[dIdx + 2] * (1 - a));
+            data[dIdx + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+}
+
+export default function DoorCompositePage() {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    const [bgFile, setBgFile] = useState<File | null>(null);
+    const [bgUrl, setBgUrl] = useState<string>("");
+
+    const [doorId, setDoorId] = useState<string>(DOORS[0]?.id ?? "");
+    const door = useMemo(() => DOORS.find(d => d.id === doorId) ?? DOORS[0], [doorId]);
+
+    const [opacity, setOpacity] = useState<number>(0.9);
+
+    const [bgImg, setBgImg] = useState<HTMLImageElement | null>(null);
+    const [doorImg, setDoorImg] = useState<HTMLImageElement | null>(null);
+
+    // 캔버스 표시용(리사이즈) 스케일
+    const [displayScale, setDisplayScale] = useState<number>(1);
+
+    // 4점(캔버스 좌표)
+    const [quad, setQuad] = useState<Pt[]>([
+        { x: 200, y: 200 }, // TL
+        { x: 500, y: 200 }, // TR
+        { x: 500, y: 700 }, // BR
+        { x: 200, y: 700 }, // BL
+    ]);
+
+    const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+    // 배경 업로드 처리
     useEffect(() => {
-        if (step === "select") return;
+        if (!bgFile) return;
+        const url = URL.createObjectURL(bgFile);
+        setBgUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [bgFile]);
 
-        const handleOrientation = (e: DeviceOrientationEvent) => {
-            if (!e.gamma || !e.beta) return;
-            // Damped tilt
-            const maxTilt = 10;
-            const rotY = Math.max(-maxTilt, Math.min(maxTilt, e.gamma / 3));
-            const rotX = Math.max(-maxTilt, Math.min(maxTilt, (e.beta - 45) / 3));
-            setRotation({ x: rotX, y: rotY });
-        };
-        window.addEventListener("deviceorientation", handleOrientation);
-        return () => window.removeEventListener("deviceorientation", handleOrientation);
-    }, [step]);
-
-    // --- Camera Logic (Robust) ---
+    // 이미지 로드
     useEffect(() => {
-        if (step === "select") {
-            // Cleanup phase
-            if (videoRef.current && videoRef.current.srcObject) {
-                const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-                tracks.forEach(t => t.stop());
-                videoRef.current.srcObject = null;
-            }
+        let alive = true;
+        (async () => {
+            if (!bgUrl) return;
+            const img = await loadImage(bgUrl);
+            if (!alive) return;
+            setBgImg(img);
+        })();
+        return () => { alive = false; };
+    }, [bgUrl]);
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            if (!door?.src) return;
+            const img = await loadImage(door.src);
+            if (!alive) return;
+            setDoorImg(img);
+        })();
+        return () => { alive = false; };
+    }, [door?.src]);
+
+    // 캔버스 초기 렌더
+    useEffect(() => {
+        redraw(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bgImg, doorImg, quad, opacity]);
+
+    function fitCanvasToBg(img: HTMLImageElement) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // 화면 너비에 맞춰 축소(모바일/태블릿 대응)
+        const maxW = Math.min(window.innerWidth - 32, 980);
+        const maxH = Math.min(window.innerHeight - 220, 800);
+
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+
+        const s = Math.min(maxW / iw, maxH / ih, 1);
+        setDisplayScale(s);
+
+        canvas.width = Math.round(iw * s);
+        canvas.height = Math.round(ih * s);
+    }
+
+    function drawBgOnly() {
+        const canvas = canvasRef.current;
+        if (!canvas || !bgImg) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        fitCanvasToBg(bgImg);
+
+        // 캔버스 크기가 바뀌었을 수 있으니 다시 ctx를 얻습니다.
+        const ctx2 = canvas.getContext("2d");
+        if (!ctx2) return;
+
+        ctx2.clearRect(0, 0, canvas.width, canvas.height);
+        ctx2.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    }
+
+    function redraw(resetBg: boolean) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        if (!bgImg) {
+            // 배경 없으면 안내
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+            canvas.width = 900;
+            canvas.height = 600;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#111";
+            ctx.font = "16px sans-serif";
+            ctx.fillText("① 현장 사진을 업로드하세요.", 24, 48);
+            ctx.fillText("② 도어를 선택한 뒤 4점을 드래그로 맞추세요.", 24, 80);
+            ctx.fillText("③ 합성 결과를 다운로드해 고객에게 전송하면 됩니다.", 24, 112);
             return;
         }
 
-        const startCamera = async () => {
-            try {
-                // SECURITY CHECK: browsers block mediaDevices on insecure HTTP (except localhost)
-                if (typeof navigator === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("Camera API unavailable (Insecure Context or Not Supported)");
-                }
+        // 배경 다시 그림
+        drawBgOnly();
 
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: "environment",
-                        width: { ideal: 1280 }, // Lower resolution for stability
-                        height: { ideal: 720 }
-                    }
-                });
+        // 도어 합성
+        if (doorImg) {
+            const scaledQuad = quad.map(p => ({
+                x: p.x,
+                y: p.y,
+            }));
+            warpAndComposite(canvas, doorImg, scaledQuad, opacity);
+        }
 
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    setPermission(true);
-                }
-            } catch (err) {
-                console.error("Camera Init Failed:", err);
-                setPermission(false); // Triggers "Demo Mode" / Error UI
+        // 가이드 점/선 그리기
+        drawOverlay();
+    }
+
+    function drawOverlay() {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // 선
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(0, 255, 180, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(quad[0].x, quad[0].y);
+        ctx.lineTo(quad[1].x, quad[1].y);
+        ctx.lineTo(quad[2].x, quad[2].y);
+        ctx.lineTo(quad[3].x, quad[3].y);
+        ctx.closePath();
+        ctx.stroke();
+
+        // 점(핸들)
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.arc(quad[i].x, quad[i].y, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = "rgba(0, 255, 180, 1)";
+            ctx.arc(quad[i].x, quad[i].y, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "white";
+            ctx.font = "12px sans-serif";
+            const label = ["TL", "TR", "BR", "BL"][i];
+            ctx.fillText(label, quad[i].x + 14, quad[i].y + 4);
+        }
+        ctx.restore();
+    }
+
+    function getCanvasPoint(e: React.PointerEvent) {
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        return { x, y };
+    }
+
+    function onPointerDown(e: React.PointerEvent) {
+        if (!canvasRef.current) return;
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        const p = getCanvasPoint(e);
+
+        // 가장 가까운 점 선택
+        let best = -1;
+        let bestD = Infinity;
+        for (let i = 0; i < 4; i++) {
+            const d = dist(p, quad[i]);
+            if (d < bestD) {
+                bestD = d;
+                best = i;
             }
-        };
+        }
+        // 반경 30px 안에 있으면 잡기
+        if (bestD <= 30) setDragIdx(best);
+    }
 
-        // Slight delay to ensure DOM is ready
-        const timeout = setTimeout(startCamera, 100);
-        return () => clearTimeout(timeout);
-    }, [step]);
+    function onPointerMove(e: React.PointerEvent) {
+        if (dragIdx === null) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-    // Touch Handling (Only active in PLACED mode)
-    const touchStartRef = useRef<{ x: number, y: number, iX: number, iY: number } | null>(null);
-    const handleTouchStart = (e: React.TouchEvent) => {
-        if (step !== "placed") return;
-        const t = e.touches[0];
-        touchStartRef.current = { x: t.clientX, y: t.clientY, iX: posX, iY: posY };
-    };
-    const handleTouchMove = (e: React.TouchEvent) => {
-        if (step !== "placed" || !touchStartRef.current) return;
-        const t = e.touches[0];
-        const dx = t.clientX - touchStartRef.current.x;
-        const dy = t.clientY - touchStartRef.current.y;
+        const p = getCanvasPoint(e);
+        const nx = clamp(p.x, 0, canvas.width);
+        const ny = clamp(p.y, 0, canvas.height);
 
-        setPosX(touchStartRef.current.iX + dx);
-        // Vertical move (percent)
-        const dYP = (dy / window.innerHeight) * 100 * -1;
-        setPosY(Math.max(-20, Math.min(50, touchStartRef.current.iY + dYP)));
-    };
+        setQuad(prev => {
+            const next = [...prev];
+            next[dragIdx] = { x: nx, y: ny };
+            return next;
+        });
+    }
 
-    // --- Actions ---
-    const handleConfirmCalibration = () => {
-        setStep("scan");
-    };
+    function onPointerUp(e: React.PointerEvent) {
+        setDragIdx(null);
+    }
 
-    const handlePlaceDoor = () => {
-        setStep("placed");
-        // Reset position to center for visibility guarantee
-        setPosX(0);
-        setPosY(0);
-    };
+    function resetQuadToCenter() {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const w = canvas.width;
+        const h = canvas.height;
 
-    const handleReset = () => {
-        // Full Reset
-        setStep("calibrate");
-        setScale(1.0);
-        setWidthMod(0); setHeightMod(0);
-        setIsOpen(false);
-    };
+        // 화면 중앙에 적당한 크기
+        const left = Math.round(w * 0.25);
+        const right = Math.round(w * 0.75);
+        const top = Math.round(h * 0.20);
+        const bottom = Math.round(h * 0.85);
 
-    const handleCreateOrder = () => {
-        // STRICT CHECK: Only allow order in 'placed' step
-        if (step !== "placed") return;
+        setQuad([
+            { x: left, y: top },
+            { x: right, y: top },
+            { x: right, y: bottom },
+            { x: left, y: bottom },
+        ]);
+    }
 
-        const newOrder: any = {
-            id: `ord_${Date.now()}`,
-            customerId: user?.id || "guest",
-            status: "AR_SELECTED",
-            estPrice: totalPrice,
-            items: [{
-                category: "중문",
-                detail: doorType,
-                glass: glassType,
-                color: frameColor,
-                width: calcWidth,
-                height: calcHeight,
-                quantity: 1
-            }]
-        };
-        addOrder(newOrder);
-        alert(`견적 저장 완료!\n${calcWidth}x${calcHeight}mm`);
-        router.push("/shop");
-    };
-
-    if (!isMounted) return <div className="bg-slate-900 h-screen w-screen" />;
+    function downloadResult() {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        a.download = `door_composite_${Date.now()}.png`;
+        a.click();
+    }
 
     return (
-        <div className={styles.arRoot}>
-            {/* STEP 1: SELECTION UI */}
-            {step === "select" && (
-                <div className="flex flex-col h-screen bg-slate-900 text-white overflow-y-auto safe-bottom">
-                    <header className="p-6 pt-12 flex items-center justify-between sticky top-0 bg-slate-900/90 backdrop-blur z-20">
-                        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-full hover:bg-white/10"><ArrowLeft size={24} /></button>
-                        <h1 className="text-lg font-bold">AR 시공 시뮬레이션</h1>
-                        <div className="w-10"></div>
-                    </header>
-                    <div className="flex-1 px-6 pb-32">
-                        <div className="mb-8 text-center">
-                            <h2 className="text-2xl font-black mb-2">우리 집에 딱 맞는<br />중문을 찾아보세요</h2>
-                            <p className="text-slate-400 text-sm">거리 측정 캘리브레이션 기술 적용</p>
-                        </div>
+        <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>도어 합성(현장 사진 + 도어 PNG)</h1>
+            <div style={{ opacity: 0.8, marginBottom: 12, lineHeight: 1.5 }}>
+                ① 사진 업로드 → ② 도어 선택 → ③ 초록 점 4개를 문틀에 맞게 드래그 → ④ 다운로드
+            </div>
 
-                        <div className="space-y-8 mt-4">
-                            <section>
-                                <label className="text-sm font-bold text-slate-400 mb-2 block">도어 종류</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {(["3연동", "원슬라이딩", "스윙", "여닫이", "파티션"] as DoorType[]).map(t => (
-                                        <button key={t} onClick={() => setDoorType(t)} className={`p-4 rounded-xl font-bold border-2 transition-all ${doorType === t ? "border-indigo-500 bg-indigo-500/20 text-indigo-400" : "border-slate-800 text-slate-400"}`}>{t}</button>
-                                    ))}
-                                </div>
-                            </section>
-                            <section>
-                                <label className="text-sm font-bold text-slate-400 mb-2 block">프레임 컬러</label>
-                                <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
-                                    {(Object.keys(FRAME_COLORS) as FrameColor[]).map(c => (
-                                        <button key={c} onClick={() => setFrameColor(c)} className="flex flex-col items-center gap-2 min-w-[60px]">
-                                            <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${frameColor === c ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-slate-700"}`} style={{ backgroundColor: FRAME_COLORS[c] }}>
-                                                {frameColor === c && <Check size={16} className={c === "화이트" || c === "샴페인골드" ? "text-black" : "text-white"} />}
-                                            </div>
-                                            <span className="text-xs text-slate-400 font-medium">{c}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
-                            <section>
-                                <label className="text-sm font-bold text-slate-400 mb-3 block">유리 디자인</label>
-                                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-                                    {(["투명", "브론즈", "워터큐브", "미스트"] as GlassType[]).map(g => (
-                                        <button key={g} onClick={() => setGlassType(g)} className={`px-4 py-3 rounded-lg text-sm font-bold border transition-all whitespace-nowrap ${glassType === g ? "bg-white text-slate-900 border-white" : "bg-transparent text-slate-500 border-slate-700"}`}>{g}</button>
-                                    ))}
-                                </div>
-                            </section>
-                        </div>
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(260px, 320px) 1fr",
+                    gap: 12,
+                    alignItems: "start",
+                }}
+            >
+                {/* 좌측 패널 */}
+                <div
+                    style={{
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        borderRadius: 12,
+                        padding: 12,
+                        background: "white",
+                        color: 'black'
+                    }}
+                >
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>1) 현장 사진</div>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBgFile(e.target.files?.[0] ?? null)}
+                        style={{ width: "100%" }}
+                    />
+
+                    <hr style={{ margin: "12px 0", opacity: 0.2 }} />
+
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>2) 도어 선택</div>
+                    <select
+                        value={doorId}
+                        onChange={(e) => setDoorId(e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: 10, color: 'black' }}
+                    >
+                        {DOORS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                                {d.label}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div style={{ marginTop: 10 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>투명도</div>
+                        <input
+                            type="range"
+                            min={0.2}
+                            max={1}
+                            step={0.05}
+                            value={opacity}
+                            onChange={(e) => setOpacity(parseFloat(e.target.value))}
+                            style={{ width: "100%" }}
+                        />
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>{Math.round(opacity * 100)}%</div>
                     </div>
-                    <div className="fixed bottom-0 left-0 right-0 p-6 bg-slate-950 safe-bottom">
-                        <button onClick={() => setStep("calibrate")} className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-                            <Camera size={24} /> 내 집에 적용하기
+
+                    <hr style={{ margin: "12px 0", opacity: 0.2 }} />
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                            onClick={resetQuadToCenter}
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.15)",
+                                background: "white",
+                                cursor: "pointer",
+                                fontWeight: 700,
+                                color: 'black'
+                            }}
+                        >
+                            4점 초기화
+                        </button>
+
+                        <button
+                            onClick={downloadResult}
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.15)",
+                                background: "#111",
+                                color: "white",
+                                cursor: "pointer",
+                                fontWeight: 800,
+                            }}
+                        >
+                            결과 다운로드
                         </button>
                     </div>
+
+                    <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7, lineHeight: 1.5 }}>
+                        ✅ 팁: 점 4개를 <b>문틀의 실제 모서리</b>에 최대한 정확히 맞추면,
+                        AR처럼 자연스럽게 합성됩니다.
+                    </div>
                 </div>
-            )}
 
-            {/* AR CORE VIEW (Shared for Calibrate/Scan/Placed) */}
-            {step !== "select" && (
-                <>
-                    {/* CAMERA LAYER */}
-                    <div className={styles.cameraLayer}>
-                        {permission === false ? (
-                            <div className="absolute inset-0 bg-slate-900 flex items-center justify-center text-white p-6 text-center z-0">
-                                <div>
-                                    <AlertTriangle className="mx-auto mb-4 text-yellow-400" size={48} />
-                                    <p className="font-bold text-lg mb-2">카메라를 실행할 수 없습니다</p>
-                                    <p className="text-sm text-slate-400 leading-relaxed max-w-xs mx-auto">
-                                        보안 문제로 카메라 접근이 차단되었습니다.<br />
-                                        (IP 접속 시 브라우저가 카메라를 차단함)<br />
-                                        <span className="text-indigo-400 font-bold mt-2 block">데모 모드(검은 배경)로 진행합니다.</span>
-                                    </p>
-                                </div>
-                            </div>
-                        ) : (
-                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                        )}
-                    </div>
-
-                    {/* 3D SCENE CONTAINER */}
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ perspective: "800px" }}>
-                        <div className="absolute left-1/2 bottom-0 w-full max-w-[500px] transition-transform duration-100 ease-out origin-bottom"
+                {/* 캔버스 */}
+                <div
+                    style={{
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        borderRadius: 12,
+                        padding: 12,
+                        background: "white",
+                        color: 'black'
+                    }}
+                >
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>미리보기</div>
+                    <div style={{ width: "100%", overflow: "auto" }}>
+                        <canvas
+                            ref={canvasRef}
+                            onPointerDown={onPointerDown}
+                            onPointerMove={onPointerMove}
+                            onPointerUp={onPointerUp}
                             style={{
-                                bottom: `${posY}%`,
-                                transform: `translate(calc(-50% + ${posX}px), 0) scale(${scale}) rotateX(${rotation.x}deg) rotateY(${-rotation.y}deg)`
-                            }}>
-
-                            {/* 1. CALIBRATION GHOST BOX (Strictly Before Scan) */}
-                            {step === "calibrate" && (
-                                <div className="flex flex-col items-center">
-                                    <div className="border-4 border-red-500/80 bg-red-500/10 w-full h-[600px] flex items-center justify-center relative animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.3)]">
-                                        <div className="bg-red-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg">
-                                            기준 높이 2100mm
-                                        </div>
-                                        {/* Corners */}
-                                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-red-500"></div>
-                                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-red-500"></div>
-                                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-red-500"></div>
-                                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-red-500"></div>
-                                    </div>
-                                    <div className="mt-4 bg-black/60 backdrop-blur px-4 py-2 rounded-lg text-white text-xs font-bold text-center">
-                                        이 박스 높이를<br />실제 설치 위치 높이와 맞춰주세요
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 2. PLACEMENT & VERIFIED DOOR */}
-                            {(step === "placed") && (
-                                <div className="pointer-events-auto" onClick={() => setIsOpen(!isOpen)}>
-                                    <div className="relative shadow-2xl drop-shadow-2xl">
-                                        <DoorModel
-                                            type={doorType}
-                                            frameColor={frameColor}
-                                            glassType={glassType}
-                                            width={calcWidth}
-                                            height={calcHeight}
-                                            isOpen={isOpen}
-                                        />
-
-                                        {/* Interaction Hint */}
-                                        {!isOpen && (
-                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse z-50">
-                                                <span className="bg-black/40 text-white text-[10px] px-2 py-1 rounded-full border border-white/20 backdrop-blur">👆 터치 OPEN</span>
-                                            </div>
-                                        )}
-
-                                        {/* Size Labels */}
-                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs px-2 py-0.5 rounded font-bold">{calcWidth}mm</div>
-                                        <div className="absolute top-1/2 -left-10 -translate-y-1/2 bg-indigo-600 text-white text-xs px-2 py-0.5 rounded font-bold -rotate-90">{calcHeight}mm</div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* TOUCH LAYER (Active in Placed Mode) */}
-                    {step === "placed" && (
-                        <div className="absolute inset-0 z-10"
-                            onTouchStart={handleTouchStart}
-                            onTouchMove={handleTouchMove}
-                            onTouchEnd={() => touchStartRef.current = null}
+                                width: "100%",
+                                maxWidth: 980,
+                                borderRadius: 12,
+                                border: "1px solid rgba(0,0,0,0.12)",
+                                touchAction: "none",
+                            }}
                         />
-                    )}
-
-                    {/* HUD / CONTROLS LAYER */}
-                    <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between safe-bottom">
-                        {/* Top Bar */}
-                        <div className="p-4 pt-12 flex justify-between bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
-                            <button onClick={() => step === "placed" ? handleReset() : setStep("select")} className="p-3 bg-white/20 text-white rounded-full backdrop-blur hover:bg-white/30 transition">
-                                <ArrowLeft size={20} />
-                            </button>
-                            <div className="bg-black/50 backdrop-blur px-4 py-1.5 rounded-full border border-white/20 text-white font-bold text-sm flex items-center gap-2">
-                                {step === "calibrate" && <span className="text-red-400">📏 거리 기준점 잡기</span>}
-                                {step === "scan" && <span className="text-yellow-400">🎯 설치 위치 조준</span>}
-                                {step === "placed" && <span className="text-green-400">✅ 사이즈 & 위치 확정</span>}
-                            </div>
-                            <div className="w-10" />
-                        </div>
-
-                        {/* Center Reticle (Scan Mode Only) */}
-                        {step === "scan" && (
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center">
-                                <div className="w-16 h-16 border-2 border-white rounded-full flex items-center justify-center box-border shadow-[0_0_15px_rgba(255,255,255,0.5)]">
-                                    <div className="w-1 h-1 bg-white rounded-full" />
-                                </div>
-                                <div className="mt-6 bg-black/60 backdrop-blur text-white text-sm px-4 py-2 rounded-xl text-center font-bold">
-                                    바닥 경계선에 십자선을 맞추세요
-                                </div>
-                            </div>
-                        )}
-
-                        {/* AI COACH OVERLAY (NEW) */}
-                        {(step === "placed" || step === "scan") && (
-                            <AICoachOverlay
-                                analysis={aiAnalysis}
-                                recommendations={recommendations}
-                                onApplyRecommendation={handleApplyRecommendation}
-                                onRequestConsult={handleRequestConsult}
-                                onSaveQuote={handleSaveQuote}
-                            />
-                        )}
-
-                        {/* Bottom Controls */}
-                        <div className="p-6 bg-gradient-to-t from-black/95 via-black/80 to-transparent pointer-events-auto pt-16">
-
-                            {/* CALIBRATION CONTROLS */}
-                            {step === "calibrate" && (
-                                <div className="space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
-                                    <div className="bg-slate-800/80 p-4 rounded-xl backdrop-blur border border-slate-700">
-                                        <div className="flex justify-between text-white/70 text-xs uppercase font-bold mb-2">
-                                            <span>Scale (거리 조절)</span>
-                                            <span>{Math.round(scale * 100)}%</span>
-                                        </div>
-                                        <input
-                                            type="range" min="0.5" max="1.5" step="0.01"
-                                            value={scale} onChange={e => setScale(parseFloat(e.target.value))}
-                                            className="w-full h-4 bg-slate-600 rounded-full appearance-none accent-indigo-500 cursor-pointer"
-                                        />
-                                    </div>
-                                    <button onClick={handleConfirmCalibration} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl shadow-lg shadow-indigo-900/30 active:scale-95 transition-all text-lg">
-                                        기준 설정 완료
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* SCAN CONTROLS */}
-                            {step === "scan" && (
-                                <div className="flex justify-center items-center gap-6 pb-8 animate-in zoom-in fade-in duration-300">
-
-                                    {/* AI AUTO STYLE */}
-                                    <button onClick={handleAIStyleMatch} disabled={isAnalyzing} className="flex flex-col items-center gap-2 group">
-                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 border-white/50 backdrop-blur transition-all ${isAnalyzing ? "bg-indigo-500 animate-pulse" : "bg-black/40 group-active:scale-95"}`}>
-                                            {isAnalyzing ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Wand2 className="text-white" size={24} />}
-                                        </div>
-                                        <span className="text-white text-xs font-bold shadow-black drop-shadow-md">AI Stylist</span>
-                                    </button>
-
-                                    {/* MANUAL PLACE */}
-                                    <button onClick={handlePlaceDoor} className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-[0_0_0_8px_rgba(255,255,255,0.2)] active:scale-90 transition-transform">
-                                        <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center border-4 border-white">
-                                            <Camera className="text-white" size={36} />
-                                        </div>
-                                    </button>
-
-                                    {/* Spacer for balance */}
-                                    <div className="w-14"></div>
-                                </div>
-                            )}
-
-                            {/* PLACED CONTROLS */}
-                            {step === "placed" && (
-                                <div className="space-y-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
-                                    {/* Manual Size Controls */}
-                                    <div className="bg-black/60 backdrop-blur rounded-xl p-4 flex flex-col gap-3 border border-white/10">
-                                        <div className="flex items-center justify-between text-white text-sm font-bold">
-                                            <span className="flex items-center gap-2"><ArrowLeft size={14} className="rotate-180" /> 가로 폭 ({calcWidth}mm)</span>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setWidthMod(p => p - 50)} className="w-10 h-10 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center active:scale-90 transition">-</button>
-                                                <button onClick={() => setWidthMod(p => p + 50)} className="w-10 h-10 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center active:scale-90 transition">+</button>
-                                            </div>
-                                        </div>
-                                        <div className="h-[1px] bg-white/10 w-full" />
-                                        <div className="flex items-center justify-between text-white text-sm font-bold">
-                                            <span className="flex items-center gap-2"><ArrowLeft size={14} className="-rotate-90" /> 세로 높이 ({calcHeight}mm)</span>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setHeightMod(p => p - 50)} className="w-10 h-10 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center active:scale-90 transition">-</button>
-                                                <button onClick={() => setHeightMod(p => p + 50)} className="w-10 h-10 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center active:scale-90 transition">+</button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-3">
-                                        <button onClick={handleReset} className="flex-1 py-4 bg-slate-800 text-slate-300 font-bold rounded-xl text-sm shadow-lg active:scale-95 transition-transform">
-                                            다시 촬영
-                                        </button>
-                                        <button onClick={handleCreateOrder} className="flex-[2] py-4 bg-white text-indigo-900 font-black rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 text-lg">
-                                            <Check size={24} strokeWidth={3} />
-                                            견적 저장
-                                        </button>
-                                    </div>
-                                    <div className="text-center text-xs text-slate-400 font-medium">
-                                        예상 견적가: {totalPrice.toLocaleString()}원
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
-                </>
-            )}
-        </div>
-    );
-}
 
-export default function ShopArPage() {
-    return (
-        <Suspense fallback={<div className="h-screen flex items-center justify-center text-white bg-slate-900">AR 로딩중...</div>}>
-            <ShopArContent />
-        </Suspense>
+                    <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+                        표시 스케일: {Math.round(displayScale * 100)}% (자동 축소)
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
