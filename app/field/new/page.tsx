@@ -178,6 +178,7 @@ function FieldCorrectionContent() {
     // Default glass
     const [glass, setGlass] = useState<string>("화이트 투명");
     const [viewGlassCategory, setViewGlassCategory] = useState<keyof typeof GLASS_HIERARCHY>("투명 유리");
+    const [doorColor, setDoorColor] = useState(""); // Fix: Add missing state
 
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");

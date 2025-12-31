@@ -206,6 +206,16 @@ export default function TranslatePanel(props: {
         }
     };
 
+    const copy = async (text: string) => {
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            alert("복사되었습니다.");
+        } catch (e) {
+            console.error("Copy failed", e);
+        }
+    };
+
     const onTranslate = async () => {
         setErr("");
         const rawInput = inputRef.current?.value || ""; // Read from Ref

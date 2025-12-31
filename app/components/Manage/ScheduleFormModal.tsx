@@ -413,8 +413,8 @@ export default function ScheduleFormModal({ isOpen, onClose, selectedDate, editi
             <AddressSearchModal
                 isOpen={addressModalOpen}
                 onClose={() => setAddressModalOpen(false)}
-                onSelect={(addr) => {
-                    setNewCustomerData(prev => ({ ...prev, address: addr }));
+                onComplete={(data: any) => {
+                    setNewCustomerData(prev => ({ ...prev, address: data.address || "" }));
                     setAddressModalOpen(false);
                 }}
             />
