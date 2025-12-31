@@ -103,17 +103,23 @@ export default function ContractList() {
                 status: (s.status?.toUpperCase() === 'MEASURED') ? 'MEASURED' : ((s.status?.toUpperCase() === 'SCHEDULED') ? 'INSTALL_SCHEDULED' : 'MEASURE_REQUESTED'),
                 title: s.title || "견적 문의",
                 items: parsedItems,
-                totalPrice: 0,
+                // totalPrice removed
                 estPrice: s.est_amount || 0,
                 finalPrice: 0,
                 createdAt: s.created_at,
-                updatedAt: s.updated_at,
+                // updatedAt removed
                 measureDate: s.visit_date,
                 installDate: s.install_date,
-                partnerId: null,
+                // partnerId removed
                 measureFiles: s.photos || [],
                 installFiles: [],
-                asHistory: []
+                asHistory: [],
+
+                // Missing Required Fields
+                tenantId: "t_head", // Default fallback
+                deposit: 0,
+                balance: 0,
+                paymentStatus: "Unpaid"
             });
         }
 
