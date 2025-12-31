@@ -1,12 +1,1 @@
-{
-    "crons": [
-        {
-            "path": "/api/marketing/automation/worker?key=dk_cron_2025_limsdoor_secret_key",
-            "schedule": "0 0 * * *"
-        },
-        {
-            "path": "/api/marketing/messages/worker?key=dk_cron_2025_limsdoor_secret_key",
-            "schedule": "0 0 * * *"
-        }
-    ]
-}
+{}
