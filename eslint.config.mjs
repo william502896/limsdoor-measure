@@ -16,7 +16,8 @@ const eslintConfig = defineConfig([
     "components/**",
     "lib/**",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "**/*.js"
   ]),
 ]);
 
