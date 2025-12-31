@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
-import { MISOTECH_PURCHASE_TABLE_2024_04 as TABLE } from "@/app/lib/misoPurchasePriceTable"; // Keep for meta if needed, or remove?
-import { MISOTECH_MATERIALS_2024_04, calculateMisoCost, DoorSpec, MaterialKey, MaterialSelection, MisoProductType, FixVariant, SemiSwingVariant, mapGlassToGroup } from "../../lib/miso_cost_data";
+import { supabase } from "@/app/lib/supabase"; // Import Supabase
+import { Partner, PriceRule, Item } from "@/app/lib/admin/types"; // Import Types
+import { MISOTECH_PURCHASE_TABLE_2024_04 as TABLE } from "@/app/lib/misoPurchasePriceTable";
+import { MISOTECH_MATERIALS_2024_04, calculateMisoCost, DoorSpec, MaterialKey, MaterialSelection, MisoProductType, FixVariant, SemiSwingVariant, mapGlassToGroup, MaterialItem } from "../../lib/miso_cost_data";
 import { SaleDiscountRule, SaleColor } from "@/app/lib/salesPriceTypes";
-import { Calculator, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import { Calculator, AlertTriangle, CheckCircle, Info, Building2 } from "lucide-react";
 
 // --- Types & Constants ---
 // UI keeps extended types for easy selection
 const PRODUCT_TYPES = [
-    { value: "1S_MANUAL", label: "1S 수동도어" }, // Renamed
+    { value: "1S_MANUAL", label: "1S 수동도어" },
     { value: "FIX_1S1F", label: "FIX (기둥바)" },
     { value: "FIX_2S_H", label: "FIX (H바)" },
     { value: "1S_AUTO", label: "1S 자동문" },
@@ -76,6 +78,12 @@ export default function MisoCostPage() {
     const [priority, setPriority] = useState(0);
     const [showAdvanced, setShowAdvanced] = useState(false);
 
+    // ✅ Partner Unit Price Integration
+    const [partners, setPartners] = useState<Partner[]>([]);
+    const [items, setItems] = useState<Item[]>([]);
+    const [rules, setRules] = useState<PriceRule[]>([]);
+    const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+
     // --- Helpers ---
     const MATERIAL_GROUPS: { id: string; title: string; keys: MaterialKey[] }[] = [
         { id: "COMMON", title: "공통/마감", keys: ["FINISH_MAT_L", "FINISH_MAT_S"] },
@@ -85,6 +93,21 @@ export default function MisoCostPage() {
         { id: "THREE_T", title: "3연동 자재", keys: ["MIDBAR_18_PER_M", "ADHESIVEBAR_18_2P5M", "BAR_30x10_EA", "BAR_60x2P5_EA"] },
         { id: "HOPE_FIX", title: "호페/픽스 기둥바", keys: ["HOPE_FIX_PILLAR_50x47_SET"] },
     ];
+
+    useEffect(() => {
+        loadPartnerData();
+    }, []);
+
+    const loadPartnerData = async () => {
+        const [pRes, iRes, rRes] = await Promise.all([
+            supabase.from("partners").select("*").eq("status", "active").order("name"),
+            supabase.from("items").select("*").order("name"),
+            supabase.from("price_rules").select("*").neq("status", "archived")
+        ]);
+        if (pRes.data) setPartners(pRes.data);
+        if (iRes.data) setItems(iRes.data);
+        if (rRes.data) setRules(rRes.data);
+    };
 
     function upsertSelection(key: MaterialKey, patch: Partial<MaterialSelection>) {
         setMaterialsSelections((prev) => {
@@ -114,6 +137,42 @@ export default function MisoCostPage() {
             upsertSelection(key, { enabled: false });
         }
     }
+
+    // ✅ Dynamic Material Prices based on selected partner
+    const customMaterials = useMemo(() => {
+        if (!selectedPartnerId) return undefined;
+
+        // Clone defaults
+        const overrides: Record<MaterialKey, MaterialItem> = { ...MISOTECH_MATERIALS_2024_04 };
+        let hasOverride = false;
+
+        const partnerRules = rules.filter(r => r.partner_id === selectedPartnerId);
+
+        // Iterate only overlapping items
+        Object.values(overrides).forEach(def => {
+            // Match Logic: Check if we have an Item with same name as Material Label
+            const matchedItem = items.find(i => i.name === def.label);
+            if (matchedItem) {
+                const rule = partnerRules.find(r => r.item_id === matchedItem.id);
+                // Apply Override if valid price
+                if (rule && rule.purchase_price > 0) {
+                    hasOverride = true;
+                    // Create new material definition
+                    overrides[def.key] = {
+                        ...def,
+                        price: {
+                            FLUORO: rule.purchase_price,
+                            ANOD: rule.purchase_price // Currently logic assumes same? Or items should handle coating? 
+                            // Ideal: Items table has coating distinction? 
+                            // Simplified: Applying same price for now.
+                        }
+                    };
+                }
+            }
+        });
+
+        return hasOverride ? overrides : undefined;
+    }, [selectedPartnerId, rules, items]);
 
     // --- Calculation Logic ---
     const result = useMemo(() => {
@@ -160,8 +219,9 @@ export default function MisoCostPage() {
             materialsSelections, // Admin override
         };
 
-        return calculateMisoCost(doorSpec);
-    }, [spec, useRecommendedMaterials, materialsSelections]);
+        // ✅ Pass customMaterials
+        return calculateMisoCost(doorSpec, customMaterials);
+    }, [spec, useRecommendedMaterials, materialsSelections, customMaterials]);
 
     // ✅ Real Effect
     useEffect(() => {
@@ -265,21 +325,7 @@ export default function MisoCostPage() {
                 setIsPublished(true);
                 alert("운영 단가로 확정되었습니다.");
             } else {
-                setIsPublished(false); // If just save, we might want to keep it as strict draft? 
-                // Wait, if I save draft, does it unpublish? Usually no, unless explicit.
-                // But the POST creates/updates. If it was already published, upsert might keep it? 
-                // The API POST implementation upserts. It implies fields not mentioned are kept?
-                // Actually Supabase upsert replaces unless patched?
-                // The POST implementation:
-                /*
-                  const payload = { ..., sale_base, ... };
-                  upsert(payload)
-                */
-                // If I don't send `is_published` in payload, and the row exists, does it respect old val?
-                // Yes if I assume standard behavior OR if I fetch first.
-                // But generally safer to be explicit.
-                // For now, I'll just upsert data. "Save Draft" usually means "Update Content".
-                // If checks logic:
+                setIsPublished(false);
                 alert("저장되었습니다.");
             }
         } catch (e) {
@@ -290,8 +336,6 @@ export default function MisoCostPage() {
     const margin = salesPrice - result.totalCost;
     const marginRate = salesPrice > 0 ? ((margin / salesPrice) * 100).toFixed(1) : "0.0";
 
-
-    // --- Handlers ---
     const updateOption = (key: keyof UiSpecState['options'], val: any) => {
         setSpec(prev => ({ ...prev, options: { ...prev.options, [key]: val } }));
     };
@@ -300,8 +344,32 @@ export default function MisoCostPage() {
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                 <Calculator className="text-indigo-600" />
-                미소테크 매입단가 계산기 (24.04 기준)
+                단가 관리 계산기
             </h1>
+
+            {/* ✅ Partner Selection Control */}
+            <div className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg flex items-center gap-4 shadow-sm">
+                <div className="flex items-center gap-2 text-indigo-800 font-bold shrink-0">
+                    <Building2 size={24} />
+                    <span>매입 업체 적용</span>
+                </div>
+                <select
+                    className="flex-1 max-w-[300px] p-2 rounded border border-indigo-200 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                    value={selectedPartnerId || ""}
+                    onChange={e => setSelectedPartnerId(e.target.value || null)}
+                >
+                    <option value="">(기본 단가 적용)</option>
+                    {partners.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+                <div className="text-xs text-indigo-600">
+                    {selectedPartnerId
+                        ? (customMaterials ? "✅ 선택한 업체의 설정된 자재 단가가 적용되었습니다." : "ℹ️ 이 업체에 설정된 자재 단가가 없습니다 (기본값 사용)")
+                        : "ℹ️ 선택하지 않으면 기본 매입 단가가 적용됩니다."
+                    }
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* === INPUT SECTION === */}
@@ -512,7 +580,11 @@ export default function MisoCostPage() {
                                         </div>
                                         <div className="p-2 space-y-1">
                                             {g.keys.map((k) => {
-                                                const item = MISOTECH_MATERIALS_2024_04[k];
+                                                const defaultItem = MISOTECH_MATERIALS_2024_04[k];
+                                                const customItem = customMaterials?.[k]; // Check override
+                                                const item = customItem || defaultItem;
+                                                const isOverridden = !!customItem;
+
                                                 if (!item) return null;
 
                                                 const sel = getSelection(k);
@@ -532,13 +604,18 @@ export default function MisoCostPage() {
                                                         <div className="flex-1 min-w-0">
                                                             <div className={`text-sm font-bold truncate ${enabled ? 'text-slate-900' : 'text-slate-500'}`}>
                                                                 {item.label}
+                                                                {isOverridden && <span className="ml-2 text-[10px] text-indigo-600 bg-indigo-50 px-1 rounded">업체단가</span>}
                                                             </div>
                                                             <div className="text-[10px] text-slate-400">
                                                                 {item.unit} {item.note && `· ${item.note}`}
+                                                                {/* Price Display */}
+                                                                <span className="ml-2 text-slate-500">
+                                                                    ({(item.price.FLUORO || 0).toLocaleString()}원)
+                                                                </span>
                                                             </div>
                                                         </div>
 
-                                                        {/* Qty Input (Only visible/enabled if checked) */}
+                                                        {/* Qty Input */}
                                                         {enabled && (
                                                             <div className="w-20 shrink-0">
                                                                 {item.unit === "M" ? (
@@ -653,7 +730,10 @@ export default function MisoCostPage() {
                             </div>
                             <div className="flex justify-between text-yellow-300 font-bold">
                                 <span className="text-yellow-300/80">자재비 합계</span>
-                                <span>{result.materialCost.toLocaleString()}</span>
+                                <div className="flex items-center gap-2">
+                                    {selectedPartnerId && result.materialCost > 0 && <span className="text-[10px] px-1 bg-indigo-500 rounded">업체적용</span>}
+                                    <span>{result.materialCost.toLocaleString()}</span>
+                                </div>
                             </div>
                             <div className="flex justify-between pt-2 border-t border-slate-600 font-bold">
                                 <span className="text-slate-300">총 매입원가</span>
@@ -799,8 +879,8 @@ export default function MisoCostPage() {
                                             <input
                                                 type="date"
                                                 className="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-900"
-                                                value={startsAt}
-                                                onChange={(e) => setStartsAt(e.target.value)}
+                                                value={startsAt.split("T")[0]}
+                                                onChange={(e) => setStartsAt(e.target.value ? e.target.value + "T00:00:00" : "")}
                                             />
                                         </div>
                                         <div>
@@ -808,144 +888,33 @@ export default function MisoCostPage() {
                                             <input
                                                 type="date"
                                                 className="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-900"
-                                                value={endsAt}
-                                                onChange={(e) => setEndsAt(e.target.value)}
+                                                value={endsAt.split("T")[0]}
+                                                onChange={(e) => setEndsAt(e.target.value ? e.target.value + "T23:59:59" : "")}
                                             />
                                         </div>
-                                    </div>
-
-                                    {/* Priority */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-800 mb-1">우선순위 (낮을수록 우선)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full border border-slate-300 rounded-lg p-2 text-sm text-slate-900"
-                                            value={priority}
-                                            onChange={(e) => setPriority(Number(e.target.value))}
-                                        />
-                                    </div>
-
-                                    {/* Discount Rules */}
-                                    <div className="border-t border-slate-300 pt-3">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <label className="text-xs font-bold text-slate-800">할인/이벤트 규칙</label>
-                                            <button
-                                                onClick={() => setDiscountRules([...discountRules, {
-                                                    name: "",
-                                                    type: "AMOUNT",
-                                                    value: 0,
-                                                    target: "BASE_ONLY",
-                                                    stackable: false
-                                                }])}
-                                                className="px-2 py-1 bg-indigo-500 text-white text-xs rounded hover:bg-indigo-600"
-                                            >
-                                                + 규칙 추가
-                                            </button>
-                                        </div>
-
-                                        {discountRules.length === 0 && (
-                                            <div className="text-xs text-slate-400 text-center py-2">규칙 없음</div>
-                                        )}
-
-                                        {discountRules.map((rule, idx) => (
-                                            <div key={idx} className="p-2 bg-white rounded border border-slate-200 mb-2 space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="규칙 이름"
-                                                        className="flex-1 border border-slate-300 rounded p-1 text-xs mr-2 text-slate-900"
-                                                        value={rule.name}
-                                                        onChange={(e) => {
-                                                            const updated = [...discountRules];
-                                                            updated[idx].name = e.target.value;
-                                                            setDiscountRules(updated);
-                                                        }}
-                                                    />
-                                                    <button
-                                                        onClick={() => setDiscountRules(discountRules.filter((_, i) => i !== idx))}
-                                                        className="px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
-                                                    >
-                                                        삭제
-                                                    </button>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <select
-                                                        className="border border-slate-300 rounded p-1 text-xs text-slate-900"
-                                                        value={rule.type}
-                                                        onChange={(e) => {
-                                                            const updated = [...discountRules];
-                                                            updated[idx].type = e.target.value as any;
-                                                            setDiscountRules(updated);
-                                                        }}
-                                                    >
-                                                        <option value="AMOUNT">정액 할인</option>
-                                                        <option value="PERCENT">정률 할인</option>
-                                                        <option value="COUPON_CODE">쿠폰 코드</option>
-                                                    </select>
-
-                                                    <input
-                                                        type="number"
-                                                        placeholder={rule.type === "PERCENT" ? "%" : "원"}
-                                                        className="border border-slate-300 rounded p-1 text-xs text-slate-900"
-                                                        value={rule.value}
-                                                        onChange={(e) => {
-                                                            const updated = [...discountRules];
-                                                            updated[idx].value = Number(e.target.value);
-                                                            setDiscountRules(updated);
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                <select
-                                                    className="w-full border border-slate-300 rounded p-1 text-xs text-slate-900"
-                                                    value={rule.target}
-                                                    onChange={(e) => {
-                                                        const updated = [...discountRules];
-                                                        updated[idx].target = e.target.value as any;
-                                                        setDiscountRules(updated);
-                                                    }}
-                                                >
-                                                    <option value="BASE_ONLY">기준가만</option>
-                                                    <option value="BASE_PLUS_OPTIONS">기준+옵션</option>
-                                                    <option value="FINAL_TOTAL">최종가</option>
-                                                </select>
-
-                                                <label className="flex items-center text-xs">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="mr-1"
-                                                        checked={rule.stackable}
-                                                        onChange={(e) => {
-                                                            const updated = [...discountRules];
-                                                            updated[idx].stackable = e.target.checked;
-                                                            setDiscountRules(updated);
-                                                        }}
-                                                    />
-                                                    중복 허용
-                                                </label>
-                                            </div>
-                                        ))}
                                     </div>
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-3 pt-2">
-                                <button
-                                    onClick={() => handleSavePrice(false)}
-                                    className="px-4 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
-                                >
-                                    임시 저장
-                                </button>
+                            <button
+                                onClick={() => handleSavePrice(false)}
+                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <CheckCircle size={18} />
+                                {priceId ? "단가 수정 저장" : "새 단가 등록"}
+                            </button>
+                            {priceId && !isPublished && (
                                 <button
                                     onClick={() => handleSavePrice(true)}
-                                    className="px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md transition-colors"
+                                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
-                                    확정 (운영반영)
+                                    <CheckCircle size={18} />
+                                    운영 단가로 배포 (Publish)
                                 </button>
-                            </div>
+                            )}
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>

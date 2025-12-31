@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { Item } from "@/app/lib/admin/types";
-import { Search, Plus, Edit, X, Save, Box, Upload, Camera, AlertTriangle, Loader2, CheckCircle } from "lucide-react";
+import { Search, Plus, Edit, X, Save, Box, Upload, Camera, AlertTriangle, Loader2, CheckCircle, Trash2 } from "lucide-react";
 
 // Extended Item type for local usage if not in shared types yet
 interface ExtendedItem extends Item {
@@ -170,6 +170,17 @@ export default function ItemsPage() {
         }
     };
 
+    const handleDelete = async (id: string) => {
+        if (confirm("정말 이 품목을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.")) {
+            const { error } = await supabase.from("items").delete().eq("id", id);
+            if (error) {
+                alert("삭제 실패: " + error.message);
+            } else {
+                fetchItems();
+            }
+        }
+    };
+
     return (
         <div className="space-y-6 h-full flex flex-col">
             <div className="flex justify-between items-center">
@@ -218,9 +229,14 @@ export default function ItemsPage() {
                                             {item.cost ? `${item.cost.toLocaleString()}원` : '-'}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <button onClick={() => handleOpenModal(item)} className="p-2 hover:bg-slate-200 rounded-full">
-                                                <Edit size={16} />
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button onClick={() => handleOpenModal(item)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 hover:text-indigo-600 transition">
+                                                    <Edit size={16} />
+                                                </button>
+                                                <button onClick={() => handleDelete(item.id)} className="p-2 hover:bg-red-50 rounded-full text-slate-400 hover:text-red-600 transition">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

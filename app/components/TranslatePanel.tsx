@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { Mic, MicOff, Volume2 } from "lucide-react";
 
 type Lang = "ko" | "en" | "ja" | "zh-CN";
@@ -47,7 +47,11 @@ export default function TranslatePanel(props: {
     const [source, setSource] = useState<Lang>("ko");
     const [target, setTarget] = useState<Lang>("en");
 
-    const [input, setInput] = useState("");
+    // Refs for Uncontrolled Input (Solves IME/Keyboard issues)
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    // State only for UI updates (button enabling, results)
+    const [hasInput, setHasInput] = useState(false);
     const [output, setOutput] = useState("");
 
     const [busy, setBusy] = useState(false);
@@ -55,24 +59,32 @@ export default function TranslatePanel(props: {
 
     const [history, setHistory] = useState<HistoryItem[]>([]);
 
+    // --- Conversation Mode Logic ---
+    const [isConversationMode, setIsConversationMode] = useState(false);
+
     // --- Voice Logic (Speech-to-Text) ---
     const [listening, setListening] = useState(false);
+    const [listeningLang, setListeningLang] = useState<Lang | null>(null); // Track which voice is active
 
-    const toggleVoice = () => {
+    const toggleVoice = (overrideLang?: Lang) => {
         if (listening) {
             stopListening();
         } else {
-            startListening();
+            startListening(overrideLang);
         }
     };
 
-    const startListening = () => {
+    const startListening = (overrideLang?: Lang) => {
         // @ts-ignore
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert("이 브라우저는 음성 인식을 지원하지 않습니다. (Chrome/Edge/Safari 권장)");
             return;
         }
+
+        // Determine language: Override (Conversational) > Default (Source)
+        const targetLang = overrideLang || source;
+        setListeningLang(targetLang);
 
         const recognition = new SpeechRecognition();
         // Map Lang to Speech Lang
@@ -82,7 +94,7 @@ export default function TranslatePanel(props: {
             ja: "ja-JP",
             "zh-CN": "zh-CN",
         };
-        recognition.lang = speechLangMap[source] || "ko-KR";
+        recognition.lang = speechLangMap[targetLang] || "ko-KR";
         recognition.continuous = false;
         recognition.interimResults = false;
 
@@ -93,16 +105,59 @@ export default function TranslatePanel(props: {
 
         recognition.onend = () => {
             setListening(false);
+            setListeningLang(null);
         };
 
-        recognition.onresult = (event: any) => {
+        recognition.onresult = async (event: any) => {
             const transcript = event.results[0][0].transcript;
-            setInput((prev) => (prev ? prev + " " + transcript : transcript));
+
+            if (isConversationMode && overrideLang) {
+                // In Conversation Mode: diverse flow
+                // 1. Set Input (to show what was said)
+                if (inputRef.current) inputRef.current.value = transcript;
+                setHasInput(true);
+
+                // 2. Identify Source/Target for this turn
+                const currentSource = overrideLang;
+                const currentTarget = overrideLang === source ? target : source; // Swap if the speaker is the 'target' side
+
+                // 3. Auto Translate
+                try {
+                    setBusy(true);
+                    const translated = await apiTranslate(transcript, currentSource, currentTarget);
+                    setOutput(translated);
+
+                    // 4. Auto Speak Result
+                    speak(translated, currentTarget);
+
+                    // 5. Save History
+                    saveHistory({
+                        id: crypto.randomUUID(),
+                        at: Date.now(),
+                        source: currentSource,
+                        target: currentTarget,
+                        input: transcript,
+                        output: translated,
+                    });
+                } catch (e: any) {
+                    setErr(e.message);
+                } finally {
+                    setBusy(false);
+                }
+            } else {
+                // Standard Mode
+                if (inputRef.current) {
+                    const current = inputRef.current.value;
+                    inputRef.current.value = current ? current + " " + transcript : transcript;
+                    setHasInput(!!inputRef.current.value.trim());
+                }
+            }
         };
 
         recognition.onerror = (event: any) => {
             console.error("Speech error", event.error);
             setListening(false);
+            setListeningLang(null);
             if (event.error === 'not-allowed') {
                 alert("마이크 권한이 허용되지 않았습니다.");
             }
@@ -113,10 +168,7 @@ export default function TranslatePanel(props: {
 
     const stopListening = () => {
         setListening(false);
-        // Note: SpeechRecognition instances are usually single-use or need ref to stop manually.
-        // Ideally we keep a ref to 'recognition' if we want to abort mid-stream reliably.
-        // For this simple implementation, toggling UI state is enough as it auto-stops on silence.
-        // If explicit stop is needed, we would need a useRef<SpeechRecognition>.
+        setListeningLang(null);
     };
 
     useEffect(() => {
@@ -131,8 +183,8 @@ export default function TranslatePanel(props: {
     }, []);
 
     const canTranslate = useMemo(() => {
-        return input.trim().length > 0 && source !== target && !busy;
-    }, [input, source, target, busy]);
+        return hasInput && source !== target && !busy;
+    }, [hasInput, source, target, busy]);
 
     const saveHistory = (item: HistoryItem) => {
         const next = [item, ...history].slice(0, 10);
@@ -144,14 +196,20 @@ export default function TranslatePanel(props: {
         setErr("");
         setSource(target);
         setTarget(source);
-        // 입력/출력도 스왑하면 현장에 더 편함
-        setInput(output || input);
-        setOutput(input ? output : "");
+
+        // Swap values manually
+        if (inputRef.current) {
+            const currentInput = inputRef.current.value;
+            inputRef.current.value = output || currentInput;
+            setOutput(currentInput ? output : ""); // Logic slightly ambiguous on what output becomes, preserving original logic
+            setHasInput(!!inputRef.current.value.trim());
+        }
     };
 
     const onTranslate = async () => {
         setErr("");
-        const text = clampText(input.trim(), 2000);
+        const rawInput = inputRef.current?.value || ""; // Read from Ref
+        const text = clampText(rawInput.trim(), 2000);
         if (!text) return;
 
         try {
@@ -174,18 +232,18 @@ export default function TranslatePanel(props: {
         }
     };
 
-    const copy = async (text: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch {
-            // fallback
-            const ta = document.createElement("textarea");
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
-        }
+    const speak = (text: string, lang: Lang) => {
+        if (!text) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        // Map Lang to Speech Lang
+        const speechLangMap: Record<Lang, string> = {
+            ko: "ko-KR",
+            en: "en-US",
+            ja: "ja-JP",
+            "zh-CN": "zh-CN",
+        };
+        utterance.lang = speechLangMap[lang] || "en-US";
+        window.speechSynthesis.speak(utterance);
     };
 
     const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -228,6 +286,9 @@ export default function TranslatePanel(props: {
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.6 : 1,
                 boxShadow: variant === "primary" ? "var(--ui-btn-shadow, 0 10px 20px rgba(0,0,0,0.18))" : "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6
             }}
         >
             {children}
@@ -237,90 +298,195 @@ export default function TranslatePanel(props: {
     return (
         <div style={{ display: "grid", gap: 12 }}>
             <Card title="현장 번역">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center" }}>
-                    <select
-                        value={source}
-                        onChange={(e) => setSource(e.target.value as Lang)}
-                        style={{ height: 42, borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", padding: "0 12px", background: "#fff" }}
-                    >
-                        {Object.keys(LANG_LABEL).map((k) => (
-                            <option key={k} value={k}>
-                                {LANG_LABEL[k as Lang]} (입력)
-                            </option>
-                        ))}
-                    </select>
-
-                    <select
-                        value={target}
-                        onChange={(e) => setTarget(e.target.value as Lang)}
-                        style={{ height: 42, borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", padding: "0 12px", background: "#fff" }}
-                    >
-                        {Object.keys(LANG_LABEL).map((k) => (
-                            <option key={k} value={k}>
-                                {LANG_LABEL[k as Lang]} (결과)
-                            </option>
-                        ))}
-                    </select>
-
-                    <Btn variant="ghost" onClick={onSwap}>
-                        ⇄
-                    </Btn>
-                </div>
-
-                <div style={{ marginTop: 10, position: 'relative' }}>
-                    <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder={listening ? "듣고 있습니다... (말씀하세요)" : "여기에 입력하거나 마이크를 눌러 말하세요."}
-                        rows={4}
-                        style={{
-                            width: "100%",
-                            borderRadius: 16,
-                            border: listening ? "2px solid #ef4444" : "1px solid rgba(0,0,0,0.12)",
-                            padding: 12,
-                            paddingRight: 50, // space for mic button
-                            resize: "vertical",
-                            outline: "none",
-                            transition: "border 0.2s"
-                        }}
-                    />
+                {/* Mode Toggle */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
+                    <div className="text-sm text-slate-500 font-bold">
+                        {isConversationMode ? "🗣️ 대화 모드 (자동 통역)" : "📝 텍스트/음성 입력 모드"}
+                    </div>
                     <button
-                        onClick={toggleVoice}
-                        className="flex items-center justify-center shadow-sm"
+                        onClick={() => setIsConversationMode(!isConversationMode)}
                         style={{
-                            position: 'absolute',
-                            top: 12,
-                            right: 12,
-                            width: 36,
-                            height: 36,
-                            borderRadius: '50%',
-                            background: listening ? '#fee2e2' : '#f8fafc',
-                            border: '1px solid rgba(0,0,0,0.1)',
-                            color: listening ? '#ef4444' : '#64748b',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
+                            fontSize: 12,
+                            padding: "4px 10px",
+                            borderRadius: 20,
+                            background: isConversationMode ? "#2563EB" : "#E2E8F0",
+                            color: isConversationMode ? "#fff" : "#475569",
+                            fontWeight: 800,
+                            border: "none",
+                            cursor: "pointer",
+                            transition: "all 0.2s"
                         }}
                     >
-                        {listening ? <MicOff size={18} /> : <Mic size={18} />}
+                        {isConversationMode ? "대화 모드 끄기" : "대화 모드 켜기"}
                     </button>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                    <Btn onClick={onTranslate} disabled={!canTranslate}>
-                        {busy ? "번역 중..." : "번역하기"}
-                    </Btn>
-                    <Btn variant="ghost" onClick={() => copy(input)} disabled={!input.trim()}>
-                        입력 복사
-                    </Btn>
-                    <Btn variant="ghost" onClick={() => copy(output)} disabled={!output.trim()}>
-                        결과 복사
-                    </Btn>
-                    {props.onInsertToMemo && (
-                        <Btn variant="ghost" onClick={() => props.onInsertToMemo && props.onInsertToMemo(output)} disabled={!output.trim()}>
-                            메모에 넣기
+                {isConversationMode ? (
+                    // --- Conversation UI ---
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <button
+                            onClick={() => toggleVoice(source)}
+                            disabled={busy || (listening && listeningLang !== source)}
+                            style={{
+                                height: 120,
+                                borderRadius: 20,
+                                border: "2px solid #2563EB",
+                                background: listening && listeningLang === source ? "#EFF6FF" : "#fff",
+                                color: "#2563EB",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 10,
+                                transform: listening && listeningLang === source ? "scale(0.98)" : "scale(1)",
+                                transition: "all 0.2s",
+                                cursor: "pointer",
+                                opacity: busy || (listening && listeningLang !== source) ? 0.5 : 1
+                            }}
+                        >
+                            <div style={{
+                                width: 50, height: 50, borderRadius: "50%", background: "#2563EB",
+                                color: "#fff", display: "flex", alignItems: "center", justifyContent: "center"
+                            }}>
+                                {listening && listeningLang === source ? <MicOff size={24} /> : <Mic size={24} />}
+                            </div>
+                            <div style={{ fontWeight: 800 }}>{LANG_LABEL[source]}</div>
+                            <div style={{ fontSize: 11, opacity: 0.7 }}>누르고 말하기</div>
+                        </button>
+
+                        <button
+                            onClick={() => toggleVoice(target)}
+                            disabled={busy || (listening && listeningLang !== target)}
+                            style={{
+                                height: 120,
+                                borderRadius: 20,
+                                border: "2px solid #F97316",
+                                background: listening && listeningLang === target ? "#FFF7ED" : "#fff",
+                                color: "#F97316",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 10,
+                                transform: listening && listeningLang === target ? "scale(0.98)" : "scale(1)",
+                                transition: "all 0.2s",
+                                cursor: "pointer",
+                                opacity: busy || (listening && listeningLang === target) ? 0.5 : 1
+                            }}
+                        >
+                            <div style={{
+                                width: 50, height: 50, borderRadius: "50%", background: "#F97316",
+                                color: "#fff", display: "flex", alignItems: "center", justifyContent: "center"
+                            }}>
+                                {listening && listeningLang === target ? <MicOff size={24} /> : <Mic size={24} />}
+                            </div>
+                            <div style={{ fontWeight: 800 }}>{LANG_LABEL[target]}</div>
+                            <div style={{ fontSize: 11, opacity: 0.7 }}>Click & Speak</div>
+                        </button>
+                    </div>
+                ) : (
+                    // --- Standard UI ---
+                    <>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center" }}>
+                            {/* Selectors and Swap (Existing) */}
+                            <select
+                                value={source}
+                                onChange={(e) => setSource(e.target.value as Lang)}
+                                style={{ height: 42, borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", padding: "0 12px", background: "#fff" }}
+                            >
+                                {Object.keys(LANG_LABEL).map((k) => (
+                                    <option key={k} value={k}>
+                                        {LANG_LABEL[k as Lang]} (입력)
+                                    </option>
+                                ))}
+                            </select>
+
+                            <select
+                                value={target}
+                                onChange={(e) => setTarget(e.target.value as Lang)}
+                                style={{ height: 42, borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", padding: "0 12px", background: "#fff" }}
+                            >
+                                {Object.keys(LANG_LABEL).map((k) => (
+                                    <option key={k} value={k}>
+                                        {LANG_LABEL[k as Lang]} (결과)
+                                    </option>
+                                ))}
+                            </select>
+
+                            <Btn variant="ghost" onClick={onSwap}>
+                                ⇄
+                            </Btn>
+                        </div>
+
+                        <div style={{ marginTop: 10, position: 'relative' }}>
+                            <textarea
+                                ref={inputRef}
+                                defaultValue="" // Uncontrolled component
+                                onChange={() => setHasInput(!!inputRef.current?.value.trim())} // Only update valid state
+                                onKeyDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                                placeholder={listening ? "듣고 있습니다... (말씀하세요)" : "여기에 입력하거나 마이크를 눌러 말하세요."}
+                                rows={4}
+                                style={{
+                                    width: "100%",
+                                    borderRadius: 16,
+                                    border: listening ? "2px solid #ef4444" : "1px solid rgba(0,0,0,0.12)",
+                                    padding: 12,
+                                    paddingRight: 50, // space for mic button
+                                    resize: "vertical",
+                                    outline: "none",
+                                    transition: "border 0.2s",
+                                    userSelect: "text",
+                                    WebkitUserSelect: "text",
+                                    zIndex: 10,
+                                    position: "relative"
+                                }}
+                            />
+                            <button
+                                onClick={() => toggleVoice()}
+                                className="flex items-center justify-center shadow-sm"
+                                style={{
+                                    position: 'absolute',
+                                    top: 12,
+                                    right: 12,
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    background: listening ? '#fee2e2' : '#f8fafc',
+                                    border: '1px solid rgba(0,0,0,0.1)',
+                                    color: listening ? '#ef4444' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {listening ? <MicOff size={18} /> : <Mic size={18} />}
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {/* Common Action Buttons (Show only if not conversation mode, or maybe show always?) */}
+                {!isConversationMode && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                        <Btn onClick={onTranslate} disabled={!canTranslate}>
+                            {busy ? "번역 중..." : "번역하기"}
                         </Btn>
-                    )}
-                </div>
+                        <Btn variant="ghost" onClick={() => copy(inputRef.current?.value || "")} disabled={!hasInput}>
+                            입력 복사
+                        </Btn>
+                        <Btn variant="ghost" onClick={() => copy(output)} disabled={!output.trim()}>
+                            결과 복사
+                        </Btn>
+                        <Btn variant="ghost" onClick={() => speak(output, target)} disabled={!output.trim()}>
+                            <Volume2 size={18} /> 듣기
+                        </Btn>
+                        {props.onInsertToMemo && (
+                            <Btn variant="ghost" onClick={() => props.onInsertToMemo && props.onInsertToMemo(output)} disabled={!output.trim()}>
+                                메모에 넣기
+                            </Btn>
+                        )}
+                    </div>
+                )}
 
                 {err && (
                     <div style={{ marginTop: 10, padding: 10, borderRadius: 14, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)" }}>
@@ -348,6 +514,14 @@ export default function TranslatePanel(props: {
                             background: "rgba(255,255,255,0.85)",
                         }}
                     />
+                    {/* In conversation mode, show speak button for output if available */}
+                    {isConversationMode && output && (
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                            <Btn variant="ghost" onClick={() => speak(output, source === listeningLang ? target : source)}>
+                                <Volume2 size={18} /> 다시 듣기
+                            </Btn>
+                        </div>
+                    )}
                 </div>
             </Card>
 
@@ -371,6 +545,22 @@ export default function TranslatePanel(props: {
                                         {LANG_LABEL[h.source]} → {LANG_LABEL[h.target]}
                                     </div>
                                     <div style={{ display: "flex", gap: 6 }}>
+                                        <button
+                                            onClick={() => speak(h.output, h.target)}
+                                            style={{
+                                                height: 30,
+                                                padding: "0 8px",
+                                                borderRadius: 10,
+                                                border: "1px solid rgba(0,0,0,0.12)",
+                                                background: "#fff",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center"
+                                            }}
+                                        >
+                                            <Volume2 size={14} />
+                                        </button>
                                         <button
                                             onClick={() => copy(h.output)}
                                             style={{

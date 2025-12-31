@@ -10,6 +10,7 @@ import LiveWeather from "./LiveWeather";
 import { useGlobalStore } from "@/app/lib/store-context";
 import RadioClient from "../RadioClient";
 import AISearchBar from "./AISearchBar";
+import { MarketingSummaryCard } from "@/components/dashboard/MarketingSummaryCard"; // NEW
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -88,20 +89,17 @@ export default function AnalyticsDashboard() {
 
                 let fetchedCompanyId = null;
                 if (user) {
-                    const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single();
+                    // Correct table name to '프로필' (Korean schema)
+                    const { data: profile } = await supabase.from("프로필").select("company_id").eq("id", user.id).single();
                     fetchedCompanyId = profile?.company_id;
                     setCompanyId(fetchedCompanyId);
                 }
 
-                // If no DB company_id, check if we are in "Demo Mode" via local state/cookie fallback?
-                // Better: If Onboarding Page sets "demo" in the cookie, we might want to read it.
-                // But for now, let's enable Demo if `companyId === 'demo'` OR if we pass a prop?
-                // Let's assume the Demo Button updates the Profile to have company_id = 'demo' ?? 
-                // No, that messes up the DB.
-                // Let's assume "Preview" sets a cookie. We read it.
+                // Demo logic: Only if NO valid company ID is found
                 const isDemoCookie = document.cookie.includes("company_id=demo");
+                const isRealCompany = fetchedCompanyId && fetchedCompanyId !== 'demo';
 
-                if (isDemoCookie || fetchedCompanyId === 'demo') {
+                if (!isRealCompany && (isDemoCookie || fetchedCompanyId === 'demo')) {
                     setIsDemo(true);
                     setMetrics({
                         revenue: 125000000,
@@ -120,11 +118,7 @@ export default function AnalyticsDashboard() {
 
                 // 1. Profiles (Staff) Count
                 const { count: staffCount } = await supabase
-                    .from("profiles") // "프로필" table might be used if migrated, but usually auth profiles is "profiles"
-                    // Wait, user used "프로필" in onboarding. I should check if "profiles" exists or if I should use "프로필".
-                    // Existing code (AdminLayout) used "profiles". Onboarding used "프로필".
-                    // I will query BOTH or just `profiles` if I am sure. 
-                    // Safest: Query `profiles` (User management usually there).
+                    .from("프로필") // Correct table name
                     .select("*", { count: "exact", head: true })
                     .eq("company_id", fetchedCompanyId);
 

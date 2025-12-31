@@ -25,6 +25,8 @@ interface StoreContextType {
     updateOrder: (id: string, p: Partial<Order>) => void;
     addCustomer: (c: Customer) => void;
     updateCustomer: (id: string, p: Partial<Customer>) => void;
+    deleteOrder: (id: string) => void;
+    createOrderWithCustomer: (order: Order, customer?: Customer) => void;
     addAsEntry: (orderId: string, entry: AsEntry) => void;
     updateUser: (id: string, p: Partial<User>) => void; // New
     addNotification: (n: any) => void;

@@ -65,7 +65,7 @@ export default function ShopLandingPage() {
                 let companyId = null;
 
                 if (user) {
-                    const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single();
+                    const { data: profile } = await supabase.from("프로필").select("company_id").eq("id", user.id).single();
                     companyId = profile?.company_id;
                 }
 

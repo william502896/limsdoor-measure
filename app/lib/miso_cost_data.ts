@@ -651,6 +651,7 @@ function safeNum(n: any, fallback = 0) {
 export function calculateMaterialCost(params: {
     coating: MisoCoating;
     selections: MaterialSelection[];
+    customMaterials?: Record<MaterialKey, MaterialItem>; // ✅ Added Override
 }): { cost: number; messages: string[]; lines: { label: string; amount: number }[] } {
     let cost = 0;
     const messages: string[] = [];
@@ -660,7 +661,8 @@ export function calculateMaterialCost(params: {
         const enabled = sel.enabled ?? true;
         if (!enabled) continue;
 
-        const item = MISOTECH_MATERIALS_2024_04[sel.key];
+        // ✅ Use custom or default
+        const item = params.customMaterials?.[sel.key] ?? MISOTECH_MATERIALS_2024_04[sel.key];
         if (!item) continue;
 
         const unitPrice = getMaterialUnitPrice(item, params.coating);
@@ -729,7 +731,7 @@ function resolveMaterialSelections(spec: DoorSpec): { selections: MaterialSelect
        ✅ MATERIALS 합산 블록을 추가한 버전(복붙 교체용)
 ========================================================= */
 
-export function calculateMisoCost(spec: DoorSpec): MisoCostResult {
+export function calculateMisoCost(spec: DoorSpec, customMaterials?: Record<MaterialKey, MaterialItem>): MisoCostResult {
     const result: MisoCostResult = {
         success: true,
         baseCost: 0,

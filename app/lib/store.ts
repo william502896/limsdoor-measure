@@ -89,11 +89,19 @@ export type OrderStatus =
     | "MEASURED"          // 실측 완료 (확정 견적)
     | "CONTRACT_CONFIRMED"// 최종 계약 (발주 대기)
     | "PRODUCING"         // 생산 중
-    | "INSTALL_SCHEDULED" // 시공 예약
-    | "INSTALLED"         // 시공 완료
+    | "INSTALL_SCHEDULED" // 시공 예약 (신규)
+    | "REFORM_SCHEDULED"  // 리폼/수리 예약
+    | "INSTALLED"         // 시공 완료 (신규)
+    | "REFORM_COMPLETED"  // 리폼/수리 완료
     | "COMPLETED"         // 최종 마감 (해피콜 등)
     | "AS_REQUESTED"      // AS 접수
-    | "AS_COMPLETED";
+    | "AS_SCHEDULED"      // AS 방문 예약
+    | "AS_COMPLETED"      // AS 완료
+    | "CANCELLED"         // 취소됨
+    | "POSTPONED";        // 연기됨
+
+export type ServiceType = "NEW_INSTALL" | "REFORM" | "AS";
+export type AsDefectType = "PRODUCT" | "INSTALL"; // 제품불량 | 시공불량
 
 // AR Scene Data (Consumer <-> Field Sync)
 export interface ArScene {
@@ -168,10 +176,19 @@ export interface AssignmentLog {
 export interface Order {
     id: string;
     customerId: string;
+    title?: string; // [NEW] Allow title
     tenantId: string; // Partition key
 
     // Workflow
     status: OrderStatus;
+
+    // New: Service Categorization
+    serviceType?: ServiceType;
+    asDefect?: AsDefectType; // if serviceType === 'AS'
+
+    // Status Tracking
+    cancelReason?: string;
+    postponeReason?: string;
 
     // Dates
     createdAt: string;
@@ -371,80 +388,62 @@ export function useStoreHook() {
         setGlobal(newState);
     };
 
-    const saveTenant = (newState: TenantState) => {
-        if (!global.currentUser?.currentTenantId) return;
-        const key = `${TENANT_PREFIX}${global.currentUser.currentTenantId}`;
-        localStorage.setItem(key, JSON.stringify(newState));
-        setTenantData(newState);
-    };
-
-    const login = (userId: string) => {
-        // Find user in global
-        // In real app, we fetch from DB. usage of `global.users` here mimics DB.
-        // We need to reload global from storage to be sure we have latest users? 
-        // For now rely on state.
-        const user = global.users.find(u => u.id === userId);
-        if (user) {
-            const next = { ...global, currentUser: user };
-            saveGlobal(next);
-        }
-    };
-
-    const logout = () => {
-        const next = { ...global, currentUser: null };
-        saveGlobal(next);
-        // Force reload to clear tenant state? 
-        // setTenantData(seedTenant("t_head")); // Optional, but safer to just let re-render handle it or redirect.
-    };
-
-    const switchTenant = (tenantId: string) => {
-        if (!global.currentUser) return;
-        // Verify user has role in this tenant (mock check)
-        // if (!global.currentUser.roles[tenantId]) return; 
-
-        const updatedUser = { ...global.currentUser, currentTenantId: tenantId };
-        const nextGlobal = {
-            ...global,
-            currentUser: updatedUser,
-            users: global.users.map(u => u.id === updatedUser.id ? updatedUser : u)
-        };
-        saveGlobal(nextGlobal);
-        setLoaded(false); // Trigger reload
+    // Helper for safe atomic updates + persistence
+    const setTenantState = (updater: (prev: TenantState) => TenantState) => {
+        setTenantData(prev => {
+            const next = updater(prev);
+            // Persistence Side-effect
+            if (global.currentUser?.currentTenantId) {
+                const key = `${TENANT_PREFIX}${global.currentUser.currentTenantId}`;
+                localStorage.setItem(key, JSON.stringify(next));
+            }
+            return next;
+        });
     };
 
     // Tenant Data Actions
     const addOrder = (order: Order) => {
-        const next = { ...tenantData, orders: [...tenantData.orders, order] };
-        saveTenant(next);
+        setTenantState(prev => ({ ...prev, orders: [...prev.orders, order] }));
     };
 
     const updateOrder = (id: string, patch: Partial<Order>) => {
-        const next = {
-            ...tenantData,
-            orders: tenantData.orders.map(o => o.id === id ? { ...o, ...patch } : o)
-        };
-        saveTenant(next);
+        setTenantState(prev => ({
+            ...prev,
+            orders: prev.orders.map(o => o.id === id ? { ...o, ...patch } : o)
+        }));
+    };
+
+    const deleteOrder = (id: string) => {
+        setTenantState(prev => ({
+            ...prev,
+            orders: prev.orders.filter(o => o.id !== id)
+        }));
     };
 
     const addCustomer = (customer: Customer) => {
-        const next = { ...tenantData, customers: [...tenantData.customers, customer] };
-        saveTenant(next);
+        setTenantState(prev => ({ ...prev, customers: [...prev.customers, customer] }));
     };
 
     const updateCustomer = (id: string, patch: Partial<Customer>) => {
-        const next = {
-            ...tenantData,
-            customers: tenantData.customers.map(c => c.id === id ? { ...c, ...patch } : c)
-        };
-        saveTenant(next);
+        setTenantState(prev => ({
+            ...prev,
+            customers: prev.customers.map(c => c.id === id ? { ...c, ...patch } : c)
+        }));
+    };
+
+    const createOrderWithCustomer = (order: Order, customer?: Customer) => {
+        setTenantState(prev => ({
+            ...prev,
+            customers: customer ? [...prev.customers, customer] : prev.customers,
+            orders: [...prev.orders, order]
+        }));
     };
 
     const addAsEntry = (orderId: string, entry: AsEntry) => {
-        const next = {
-            ...tenantData,
-            orders: tenantData.orders.map(o => o.id === orderId ? { ...o, asHistory: [...(o.asHistory || []), entry] } : o)
-        };
-        saveTenant(next);
+        setTenantState(prev => ({
+            ...prev,
+            orders: prev.orders.map(o => o.id === orderId ? { ...o, asHistory: [...(o.asHistory || []), entry] } : o)
+        }));
     };
 
     const updateUser = (id: string, p: Partial<User>) => {
@@ -470,11 +469,36 @@ export function useStoreHook() {
         }));
     };
 
+    const login = (userId: string) => {
+        const user = global.users.find(u => u.id === userId);
+        if (user) {
+            const next = { ...global, currentUser: user };
+            saveGlobal(next);
+        }
+    };
+
+    const logout = () => {
+        const next = { ...global, currentUser: null };
+        saveGlobal(next);
+    };
+
+    const switchTenant = (tenantId: string) => {
+        if (!global.currentUser) return;
+        const updatedUser = { ...global.currentUser, currentTenantId: tenantId };
+        const nextGlobal = {
+            ...global,
+            currentUser: updatedUser,
+            users: global.users.map(u => u.id === updatedUser.id ? updatedUser : u)
+        };
+        saveGlobal(nextGlobal);
+        setLoaded(false);
+    };
+
     return {
         loaded,
         // Global Context
         global,
-        users: global.users, // Exposed for Dispatch
+        users: global.users,
         tenants: global.tenants,
         user: global.currentUser,
         currentTenant: global.tenants.find(t => t.id === global.currentUser?.currentTenantId),
@@ -482,7 +506,7 @@ export function useStoreHook() {
         // Tenant Data
         settings: tenantData.settings,
         orders: tenantData.orders,
-        customers: tenantData.customers, // Keep for compatibility if needed, though customers should ideally be fetched by ID
+        customers: tenantData.customers,
 
         // Actions
         login,
@@ -492,6 +516,8 @@ export function useStoreHook() {
         updateOrder,
         addCustomer,
         updateCustomer,
+        deleteOrder,
+        createOrderWithCustomer, // EXPOSED
         addAsEntry,
         updateUser,
         addNotification,
@@ -501,15 +527,13 @@ export function useStoreHook() {
             const u = global.currentUser;
             if (!u || !u.currentTenantId) return false;
 
-            // Status Check (Must be ACTIVE)
             if (u.status !== "ACTIVE") return false;
 
             const role = u.roles[u.currentTenantId];
             if (!role) return false;
 
-            // Role-Based Permissions
             switch (role) {
-                case "OWNER": return true; // Super Admin
+                case "OWNER": return true;
                 case "MEASURER":
                     return ["VIEW_Schedule", "EDIT_Schedule", "VIEW_Measurement", "EDIT_Measurement", "VIEW_Consultation", "EDIT_Consultation", "USE_RADIO", "USE_CHAT"].includes(permission);
                 case "INSTALLER":

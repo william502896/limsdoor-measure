@@ -6,6 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useGlobalStore } from "@/app/lib/store-context";
 import {
     LayoutDashboard,
+    Layout,
+    GitBranch,
     Calendar,
     Users,
     FileText,
@@ -22,26 +24,20 @@ import {
     X,
     Radio,
     Coins,
-    ShieldCheck, // Tier 1 Header Icon
-    Building2,   // Vendor
-    Package,     // Items
-    Banknote,    // Price/Margin
-    Receipt,      // Statement
-    Palette,       // Design
-    Lock          // Locked Icon
+    ShieldCheck,
+    Building2,
+    Package,
+    Banknote,
+    Receipt,
+    Palette,
+    Lock,
+    Megaphone,
+    PhoneCall,
+    Ruler,
+    Star,
+    ChevronDown,
+    ChevronRight
 } from "lucide-react";
-
-// ...
-
-// Tier 1 (Super Admin) Group
-const TIER1_ITEMS = [
-    { id: "vendors", label: "거래처 관리", icon: Building2, href: "/admin/partners" },
-    { id: "pricing", label: "단가 관리", icon: Coins, href: "/admin/purchase-costs" },
-    { id: "materials", label: "품목/자재", icon: Package, href: "/admin/items" },
-    { id: "margins", label: "단가/마진", icon: Banknote, href: "/admin/prices" },
-    { id: "statement", label: "전자 명세서", icon: Receipt, href: "/admin/invoices" },
-    { id: "design", label: "UI 디자인", icon: Palette, href: "/admin/design" },
-];
 
 type SidebarProps = {
     collapsed?: boolean;
@@ -57,12 +53,21 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
     const notifications = global.notifications;
     const [showNotif, setShowNotif] = useState(false);
 
+    // Derived State
+    const currentView = searchParams.get("view") || "dashboard";
+    const currentTab = searchParams.get("tab");
+
+    // Collapsible State for Marketing
+    const [isMarketingOpen, setIsMarketingOpen] = useState(true);
+    const [isScheduleOpen, setIsScheduleOpen] = useState(true);
+    const [isCustomerOpen, setIsCustomerOpen] = useState(true);
+
     // Tier 1 Visibility State
     const [isTier1, setIsTier1] = useState(false);
 
     React.useEffect(() => {
         const check = () => setIsTier1(document.cookie.includes("tier1_ui=1"));
-        check(); // Check on mount
+        check();
         window.addEventListener("tier1-login", check);
         return () => window.removeEventListener("tier1-login", check);
     }, []);
@@ -86,26 +91,18 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
     React.useEffect(() => {
         if (!isTier1) return;
-
         const checkInterval = setInterval(async () => {
             const idleTime = Date.now() - lastActivityRef.current;
-            if (idleTime > 3 * 60 * 1000) { // 3 minutes
-                // Auto Logout
+            if (idleTime > 3 * 60 * 1000) {
                 try {
                     await fetch("/api/admin/tier1/logout", { method: "POST" });
                     setIsTier1(false);
-                    // Force Sidebar Update
                     window.dispatchEvent(new Event("tier1-login"));
-
-                    // Optional: If on admin page, redirect? 
-                    // But Sidebar is enough to lock. 
-                    // Redirecting specific page content needs page-level logic, but hiding menu is key.
                 } catch (e) {
                     console.error("Auto-logout failed", e);
                 }
             }
-        }, 5000); // Check every 5 seconds
-
+        }, 5000);
         return () => clearInterval(checkInterval);
     }, [isTier1]);
 
@@ -116,19 +113,54 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
         if (link) window.location.href = link;
     };
 
+    const MARKETING_ITEMS = [
+        { id: "landings", label: "랜딩 제작", icon: Layout, href: "/admin/marketing/landings" },
+        { id: "leads", label: "리드 점수", icon: BarChart3, href: "/admin/marketing/leads" },
+        { id: "scenarios", label: "자동 시나리오", icon: GitBranch, href: "/admin/marketing/scenarios" },
+        { id: "stats", label: "성과 분석", icon: BarChart3, href: "/admin/marketing/stats" },
+
+        { id: "consulting", label: "상담 / 예약", icon: PhoneCall, href: "/manage?view=consulting" },
+    ];
+
+    const SCHEDULE_ITEMS = [
+        { id: "all", label: "통합 일정", icon: Calendar, href: "/manage?view=schedule&type=all" },
+        { id: "consulting", label: "상담 일정", icon: PhoneCall, href: "/manage?view=schedule&type=consulting" },
+        { id: "measure", label: "실측/견적", icon: Ruler, href: "/manage?view=schedule&type=measure" },
+        { id: "install", label: "시공 일정", icon: Hammer, href: "/manage?view=schedule&type=install" },
+        { id: "reform", label: "리폼/수리", icon: Wrench, href: "/manage?view=schedule&type=reform" },
+        { id: "as", label: "AS 일정", icon: ShieldCheck, href: "/manage?view=schedule&type=as" },
+    ];
+
+    const CUSTOMER_ITEMS = [
+        { id: "all", label: "통합 관리", icon: Users, href: "/manage?view=customer&type=all" },
+        { id: "prospective", label: "가망 고객", icon: Star, href: "/manage?view=customer&type=prospective" },
+        { id: "consulting", label: "상담 고객", icon: PhoneCall, href: "/manage?view=customer&type=consulting" },
+        { id: "contract", label: "계약 고객", icon: FileText, href: "/manage?view=customer&type=contract" },
+        { id: "purchased", label: "구매 고객", icon: Package, href: "/manage?view=customer&type=purchased" },
+    ];
+
     const MENU_ITEMS = [
         { id: "dashboard", label: "대시보드", icon: LayoutDashboard, href: "/manage?view=dashboard" },
-        { id: "dispatch", label: "배차 관제", icon: Truck, href: "/manage?view=dispatch" },
-        { id: "schedule", label: "현장 관리", icon: Calendar, href: "/manage?view=schedule" },
-        { id: "install", label: "시공/기사", icon: Hammer, href: "/manage?view=dispatch&tab=personnel" },
-        { id: "gallery", label: "포트폴리오", icon: ImageIcon, href: "/manage?view=portfolio" },
-        { id: "customer", label: "고객 관리", icon: Users, href: "/manage?view=customer" },
-        { id: "contract", label: "계약/견적", icon: FileText, href: "/manage?view=contract" },
-        { id: "as", label: "AS/하자", icon: Wrench, href: "/manage?view=as" },
-        { id: "voice", label: "음성/AI", icon: Mic, href: "/manage?view=voice" },
-        { id: "radio", label: "무전기", icon: Radio, href: "/manage?view=radio" },
-        { id: "reports", label: "리포트", icon: BarChart3, href: "/manage?view=reports" },
+        // Marketing will be inserted here manually
+        // Schedule will be inserted here manually
+        { id: "contract", label: "견적 / 결제", icon: FileText, href: "/manage?view=contract" },
+        { id: "construction", label: "시공 관리", icon: Hammer, href: "/manage?view=construction" },
+        { id: "retention", label: "후기 / 재구매", icon: Star, href: "/manage?view=retention" },
     ];
+
+    // Check if any marketing item is active
+    const isMarketingActive = MARKETING_ITEMS.some(item => {
+        if (item.href.includes("view=")) {
+            const view = item.href.split("view=")[1];
+            return currentView === view;
+        }
+        return pathname.includes(item.href);
+    });
+
+    // Auto open if active
+    React.useEffect(() => {
+        if (isMarketingActive) setIsMarketingOpen(true);
+    }, [isMarketingActive]);
 
     // Tier 1 (Super Admin) Group
     const TIER1_ITEMS = [
@@ -204,32 +236,187 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
             {/* Menu */}
             <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
+                <div className={`px-2 mb-6 ${collapsed ? 'text-center' : ''}`}>
+                    <Link
+                        href="/admin/onboarding"
+                        className={`
+                            flex items-center gap-2 w-full rounded-xl font-bold transition-all duration-200 shadow-[0_4px_12px_rgba(99,102,241,0.3)] animate-pulse
+                            bg-gradient-to-br from-indigo-500 to-purple-600 text-white hover:shadow-indigo-500/50 hover:scale-[1.02]
+                            ${collapsed ? "justify-center p-3" : "px-3 py-3"}
+                        `}
+                        title="사용 등록하기"
+                    >
+                        <span className="text-lg">🚀</span>
+                        {!collapsed && <span className="text-sm">사용 등록하기</span>}
+                    </Link>
+                </div>
+
                 {!collapsed && <div className="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Main Menu</div>}
                 <ul className="space-y-1 px-2 mb-6">
-                    {MENU_ITEMS.map((item) => {
+                    {/* Dashboard */}
+                    <li>
+                        <Link
+                            href="/manage?view=dashboard"
+                            className={`
+                                flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200
+                                ${currentView === "dashboard" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-400 hover:bg-slate-800 hover:text-white"}
+                                ${collapsed ? "justify-center" : ""}
+                            `}
+                            title={collapsed ? "대시보드" : ""}
+                        >
+                            <LayoutDashboard size={collapsed ? 22 : 18} className={currentView === "dashboard" ? "text-white" : "text-slate-400"} />
+                            {!collapsed && <span className="text-sm font-medium">대시보드</span>}
+                        </Link>
+                    </li>
+
+                    {/* Marketing Folder */}
+                    <li>
+                        <button
+                            onClick={() => setIsMarketingOpen(!isMarketingOpen)}
+                            className={`
+                                w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-white
+                                ${collapsed ? "justify-center" : "justify-between"}
+                                ${isMarketingActive ? "bg-slate-800/50 text-indigo-400" : ""}
+                            `}
+                            title={collapsed ? "마케팅" : ""}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Megaphone size={collapsed ? 22 : 18} />
+                                {!collapsed && <span className="text-sm font-medium">마케팅</span>}
+                            </div>
+                            {!collapsed && (
+                                isMarketingOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                            )}
+                        </button>
+
+                        {/* Sub Items */}
+                        {!collapsed && isMarketingOpen && (
+                            <div className="ml-4 pl-4 border-l border-slate-700 mt-1 space-y-1 animate-in slide-in-from-left-2 duration-200">
+                                {MARKETING_ITEMS.map((item) => {
+                                    const Icon = item.icon;
+                                    let active = false;
+                                    if (item.href.includes("view=")) {
+                                        const view = item.href.split("view=")[1];
+                                        active = currentView === view;
+                                    } else {
+                                        active = pathname.startsWith(item.href);
+                                    }
+
+                                    return (
+                                        <Link
+                                            key={item.id}
+                                            href={item.href}
+                                            className={`
+                                                flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm
+                                                ${active ? "text-indigo-400 font-bold bg-slate-800/50" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"}
+                                            `}
+                                        >
+                                            <Icon size={16} />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </li>
+
+                    {/* Schedule Folder */}
+                    <li>
+                        <button
+                            onClick={() => setIsScheduleOpen(!isScheduleOpen)}
+                            className={`
+                                w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-white
+                                ${collapsed ? "justify-center" : "justify-between"}
+                                ${currentView === "schedule" ? "bg-slate-800/50 text-indigo-400" : ""}
+                            `}
+                            title={collapsed ? "일정 관리" : ""}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Calendar size={collapsed ? 22 : 18} />
+                                {!collapsed && <span className="text-sm font-medium">일정 관리</span>}
+                            </div>
+                            {!collapsed && (
+                                isScheduleOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                            )}
+                        </button>
+
+                        {/* Sub Items */}
+                        {!collapsed && isScheduleOpen && (
+                            <div className="ml-4 pl-4 border-l border-slate-700 mt-1 space-y-1 animate-in slide-in-from-left-2 duration-200">
+                                {SCHEDULE_ITEMS.map((item) => {
+                                    const Icon = item.icon;
+                                    const type = item.href.split("type=")[1];
+                                    const currentType = searchParams.get("type") || "all";
+                                    const active = currentView === "schedule" && currentType === type;
+
+                                    return (
+                                        <Link
+                                            key={item.id}
+                                            href={item.href}
+                                            className={`
+                                                flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm
+                                                ${active ? "text-indigo-400 font-bold bg-slate-800/50" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"}
+                                            `}
+                                        >
+                                            <Icon size={16} />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </li>
+
+                    {/* Customer Folder */}
+                    <li>
+                        <button
+                            onClick={() => setIsCustomerOpen(!isCustomerOpen)}
+                            className={`
+                                w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-white
+                                ${collapsed ? "justify-center" : "justify-between"}
+                                ${currentView === "customer" ? "bg-slate-800/50 text-indigo-400" : ""}
+                            `}
+                            title={collapsed ? "고객 관리" : ""}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Users size={collapsed ? 22 : 18} />
+                                {!collapsed && <span className="text-sm font-medium">고객 관리</span>}
+                            </div>
+                            {!collapsed && (
+                                isCustomerOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                            )}
+                        </button>
+
+                        {/* Sub Items */}
+                        {!collapsed && isCustomerOpen && (
+                            <div className="ml-4 pl-4 border-l border-slate-700 mt-1 space-y-1 animate-in slide-in-from-left-2 duration-200">
+                                {CUSTOMER_ITEMS.map((item) => {
+                                    const Icon = item.icon;
+                                    const type = item.href.split("type=")[1];
+                                    const currentType = searchParams.get("type") || "all";
+                                    const active = currentView === "customer" && currentType === type;
+
+                                    return (
+                                        <Link
+                                            key={item.id}
+                                            href={item.href}
+                                            className={`
+                                                flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm
+                                                ${active ? "text-indigo-400 font-bold bg-slate-800/50" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/30"}
+                                            `}
+                                        >
+                                            <Icon size={16} />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </li>
+
+                    {MENU_ITEMS.filter(i => i.id !== "dashboard").map((item) => {
                         const Icon = item.icon;
-                        const currentView = searchParams?.get("view") || "dashboard";
-
-                        // Extract view from item.href (e.g. /manage?view=dispatch)
-                        let itemView = "dashboard";
-                        if (item.href.includes("?view=")) {
-                            itemView = item.href.split("?view=")[1].split("&")[0];
-                        }
-
-                        // Special case for 'install' which shares 'dispatch' view but different tab
-                        if (item.id === "install") {
-                            // Only active if tab=personnel
-                            const currentTab = searchParams?.get("tab");
-                            var isActive = currentView === "dispatch" && currentTab === "personnel";
-                        } else {
-                            // Normal view matching
-                            var isActive = currentView === itemView;
-                            // If item is dispatch main, ensure tab is NOT personnel
-                            if (item.id === "dispatch" && isActive) {
-                                const currentTab = searchParams?.get("tab");
-                                if (currentTab === "personnel") isActive = false;
-                            }
-                        }
+                        const isActive = currentView === item.id;
 
                         return (
                             <li key={item.id}>

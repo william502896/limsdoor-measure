@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronRight, Search, X, Youtube, Instagram, Facebook, Globe, ShoppingBag, Eye, Camera, Check, AlertTriangle, Send, Smartphone, Mic, Settings, Volume2, MicOff, Languages, MapPin } from "lucide-react";
+import { ArrowLeft, Calculator, Camera, Check, ChevronDown, Eraser, Info, Mic, RotateCcw, Send, Settings, X, ImageIcon, Search, Phone, User, MapPin, Eye, CloudUpload, MessageCircle, Globe, ShoppingBag, Youtube, Instagram, Facebook, Smartphone, Languages, AlertTriangle, Volume2, MicOff } from "lucide-react";
 import VoiceInput from "@/app/components/VoiceInput";
 import NaverMapPicker from "@/app/components/NaverMapPicker";
+import AddressSearchModal from "@/app/components/AddressSearchModal";
 import { ParsedMeasurement } from "@/app/lib/voiceMeasurement";
 
 // TikTok Icon Component
@@ -25,6 +26,8 @@ import { useTheme } from "@/app/components/providers/ThemeProvider";
 import PayhereLinkPaymentBox from "@/app/components/PayhereLinkPaymentBox"; // NEW Payment
 import TranslatePanel from "@/app/components/TranslatePanel"; // NEW Translation
 import { calculateMisoCost, mapGlassToGroup, MisoProductType, DoorSpec } from "@/app/lib/miso_cost_data"; // Miso Logic
+import DemoGuard from "@/app/components/DemoGuard"; // Demo Limit
+import { useDemoLimit } from "@/app/hooks/useDemoLimit"; // Demo Limit Hook
 
 // --- Miso Helper ---
 function mapToMisoType(category: string, detail: string): MisoProductType | null {
@@ -146,6 +149,8 @@ function openSmsComposer(toPhone: string, body: string) {
 function FieldCorrectionContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { recordAction } = useDemoLimit(); // Demo Action Limit
+    const leadId = searchParams.get("leadId"); // NEW: Lead ID from URL
     const { orders, updateOrder } = useGlobalStore();
     const { theme } = useTheme(); // Hook for Design System Overrides
 
@@ -203,6 +208,8 @@ function FieldCorrectionContent() {
     const [addressLat, setAddressLat] = useState<number | null>(null);
     const [addressLng, setAddressLng] = useState<number | null>(null);
     const [loadingGPS, setLoadingGPS] = useState(false);
+    const [addressModalOpen, setAddressModalOpen] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false); // NEW
 
     // --- Effects ---
     // Walkie Talkie Init
@@ -261,6 +268,17 @@ function FieldCorrectionContent() {
         };
         setTargetOrder(activeOrder);
     }, [orders]);
+
+    // 1.5. Link Lead & Estimate (NEW)
+    useEffect(() => {
+        if (leadId && estimateId) {
+            fetch("/api/marketing/hooks/link-estimate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ leadId, estimateId }),
+            }).catch(e => console.error("Link Estimate Error:", e));
+        }
+    }, [leadId, estimateId]);
 
     // 2. Logic Effects
     useEffect(() => {
@@ -616,6 +634,8 @@ function FieldCorrectionContent() {
             category,
             detail,
             glass,
+            color: doorColor,
+            addMaterials,
             openDirection,
             slidingMode: detail.includes("원슬라이딩") ? slidingMode : null,
             design: selectedDesign ? { id: selectedDesign.id, name: selectedDesign.name } : null,
@@ -639,7 +659,9 @@ function FieldCorrectionContent() {
             `- 확정 세로: ${payload.heightMm}mm\n` +
             `- 문종류: ${payload.category} / ${payload.detail}\n` +
             `- 유리: ${payload.glass}\n` +
+            `- 색상: ${payload.color || "-"}\n` +
             `- 열림 방향: ${payload.openDirection}\n` +
+            (payload.addMaterials ? `- 추가부자재: ${payload.addMaterials}\n` : "") +
             `- 문종류: ${payload.category} / ${payload.detail}\n` +
             `- 유리: ${payload.glass}\n` +
             `- 열림 방향: ${payload.openDirection}\n` +
@@ -662,7 +684,7 @@ function FieldCorrectionContent() {
         }
     };
 
-    const send = async (target: SendTarget) => {
+    const send = async (target: SendTarget, mode: "full" | "db_only" | "share_only" = "full") => {
         const missing: string[] = [];
         if (!customerName.trim()) missing.push("고객명");
         if (!customerPhone.trim()) missing.push("연락처");
@@ -683,13 +705,25 @@ function FieldCorrectionContent() {
             return;
         }
 
-        // --- AI Validation Step (NEW) ---
-        // Only run if not confirmed yet (aiResult matches current state? No, simple flag)
-        // For simplicity: If no aiResult in state, run it.
+        // --- Validation ---
+        if (!confirmedWidth || !confirmedHeight) {
+            alert("가로/세로 확정 사이즈가 없습니다. (계산기 아이콘 클릭)");
+            return;
+        }
+
+        // --- Demo Limit Check ---
+        if (!recordAction()) {
+            alert("일일 데모 사용 한도(5회)를 초과했습니다.\n내일 다시 이용하거나 관리자 모드에서 개발자 모드를 켜주세요.");
+            return;
+        }
+
+        // --- AI Validation ---
         if (!aiResult) {
+            // ... (existing AI logic)
+            // Recalculate analysis
             const analysis = analyze({
                 category,
-                detail: detail || category, // fallback
+                detail: detail || category,
                 widthPoints: getValidNumbers(widthPoints),
                 heightPoints: getValidNumbers(heightPoints),
                 minPointsW: recPoints.w,
@@ -698,22 +732,63 @@ function FieldCorrectionContent() {
 
             if (analysis.status !== "ok") {
                 setAiResult(analysis);
-                // setTargetOrder(prev => ({ ...prev, _pendingTarget: target })); // Removed invalid property
                 setPendingTarget(target);
                 return;
             }
         }
-        // --------------------------------
+
+        // 0. Upload Photos (if any)
+        const photoUrls: { name: string, url: string }[] = [];
+        if (previews.length > 0 && mode !== 'share_only') {
+            try {
+                // Dynamic import to avoid server-side issues
+                const { createClient } = await import("@supabase/supabase-js");
+                const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+                const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+                const supabase = createClient(supabaseUrl, supabaseKey);
+
+                for (const p of previews) {
+                    const ext = p.file.name.split('.').pop();
+                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+                    const filePath = `field_uploads/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('images') // Use 'images' bucket (common) or 'field_photos'
+                        .upload(filePath, p.file);
+
+                    if (uploadError) {
+                        console.error("Photo upload failed:", uploadError);
+                        continue;
+                    }
+
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('images')
+                        .getPublicUrl(filePath);
+
+                    photoUrls.push({ name: p.file.name, url: publicUrl });
+                }
+            } catch (e) {
+                console.error("Photo upload process error:", e);
+                // Continue without photos if upload fails (don't block quote)
+            }
+        }
 
         const payload = buildPayload();
+        // Override photos with actual URLs
+        if (photoUrls.length > 0) {
+            payload.photos = photoUrls as any;
+        }
+
         if (aiResult) {
             payload.memo += `\n[AI 기록] ${aiResult.message}`;
         }
 
         const summary = buildSummaryText(payload);
 
-        // [SYSTEM Integration] Update Database
+        // [SYSTEM Integration] Update Database & Save Quote
+        // 1. Existing Demo/Mock Update (Always update local AR state)
         if (targetOrder && targetOrder.id !== "demo-order") {
+            // ... existing mock update logic ...
             const fieldData = {
                 width: payload.widthMm || 0,
                 height: payload.heightMm || 0,
@@ -733,23 +808,123 @@ function FieldCorrectionContent() {
             });
         }
 
-        if (target === "office") {
-            await sendOfficeToKakaoShareOrClipboard(summary);
-            setAiResult(null); // Reset
-            return;
+        // 2. [Real Database Save] (Run if mode is full or db_only)
+        if (mode !== 'share_only') {
+            try {
+                const res = await fetch("/api/field/submit", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    // Error handling
+                    console.error(`DB Save Failed: ${res.status}`);
+                    const errData = await res.json().catch(() => ({}));
+                    alert(`프로그램 전송 실패\n서버 오류: ${res.status}\n${errData.error?.message || ''}`);
+                } else {
+                    console.log("Quote saved to DB");
+                    if (mode === 'db_only' || target === 'office') {
+                        // Force alert for office share
+                        alert("✅ 프로그램(관리자) 전송이 완료되었습니다.");
+                    }
+                }
+            } catch (e: any) {
+                console.error("DB Save Network Error:", e);
+                alert(`전송 실패 (네트워크 오류)\n${e.message}`);
+            }
         }
-        if (target === "customer") {
-            openSmsComposer(payload.customer.phone, summary);
-            setAiResult(null); // Reset
-            return;
+
+        // 3. [Share / Send Logic] (Run if mode is full or share_only)
+        if (mode !== 'db_only') {
+            if (target === "office" || target === "both") {
+                await sendOfficeToKakaoShareOrClipboard(summary);
+                // Hook
+                fetch("/api/marketing/hooks/measurement-done", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ estimateId, payload: { by: "field/new", target } }),
+                }).catch(console.error);
+            }
+
+            if (target === "customer" || target === "both") {
+                openSmsComposer(payload.customer.phone, summary);
+                // Hook
+                fetch("/api/marketing/hooks/estimate-sent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ estimateId, payload: { sentTo: "customer" } }),
+                }).catch(console.error);
+            }
         }
-        if (target === "both") {
-            await sendOfficeToKakaoShareOrClipboard(summary);
-            openSmsComposer(payload.customer.phone, summary);
-            setAiResult(null); // Reset
-            return;
-        }
+
+        setAiResult(null); // Reset
     };
+
+    // ...
+
+    {/* Actions */ }
+    <div className="fixed bottom-0 left-0 right-0 p-3 bg-white border-t flex gap-2 z-10 safe-bottom">
+        <button onClick={() => setShowShareModal(true)}
+            className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl active:scale-95 transition flex justify-center items-center gap-2">
+            사무실 공유
+        </button>
+        <button onClick={() => send("both", "full")}
+            className="flex-[2] py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition flex justify-center items-center gap-2">
+            <Send size={18} className="-ml-1" />
+            고객 전송 (+완료처리)
+        </button>
+    </div>
+
+    {/* Office Share Selection Modal */ }
+    {
+        showShareModal && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                    <h3 className="text-lg font-bold text-center mb-6">사무실 공유 방식 선택</h3>
+
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => {
+                                send("office", "db_only");
+                                setShowShareModal(false);
+                            }}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-indigo-700 transition"
+                        >
+                            <CloudUpload size={24} />
+                            <div>
+                                <div className="text-base">프로그램 전송</div>
+                                <div className="text-[10px] font-normal opacity-70">관리자 페이지 저장 (DB)</div>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                send("office", "share_only");
+                                setShowShareModal(false);
+                            }}
+                            className="w-full py-4 bg-yellow-400 text-slate-900 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-yellow-500 transition"
+                        >
+                            <MessageCircle size={24} />
+                            <div>
+                                <div className="text-base">문자/카톡 공유</div>
+                                <div className="text-[10px] font-normal opacity-70">텍스트 복사 및 공유창</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <button
+                        onClick={() => setShowShareModal(false)}
+                        className="w-full mt-4 py-3 text-slate-400 font-medium hover:text-slate-600"
+                    >
+                        취소
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    {/* === COMPARISON MODAL === */ }
 
     const handleConfirmAI = () => {
         if (aiResult && pendingTarget) {
@@ -798,7 +973,7 @@ function FieldCorrectionContent() {
                 let companyId = null;
 
                 if (user) {
-                    const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).single();
+                    const { data: profile } = await supabase.from("프로필").select("company_id").eq("id", user.id).single();
                     companyId = profile?.company_id;
                 }
 
@@ -905,10 +1080,10 @@ function FieldCorrectionContent() {
                         </button>
                         {/* Portfolio (Internal) */}
                         <button
-                            onClick={() => window.open("/shop/portfolio", "_blank")}
+                            onClick={() => window.open("/portfolio", "_blank")}
                             className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50 backdrop-blur hover:bg-slate-700/60 transition"
                         >
-                            <Search size={22} className="text-indigo-300" />
+                            <ImageIcon size={22} className="text-indigo-300" />
                             <span className="text-[10px] text-slate-300 font-bold">포트폴리오</span>
                         </button>
 
@@ -988,7 +1163,13 @@ function FieldCorrectionContent() {
             {/* Header */}
             <div className="bg-white border-b px-4 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-100 rounded-full">
+                    <button
+                        onClick={() => {
+                            setStep("LANDING");
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="p-2 -ml-2 hover:bg-slate-100 rounded-full"
+                    >
                         <ArrowLeft size={20} />
                     </button>
                     <div>
@@ -1007,6 +1188,13 @@ function FieldCorrectionContent() {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => window.open("/portfolio", "_blank")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition active:scale-95"
+                    >
+                        <ImageIcon size={14} />
+                        포트폴리오
+                    </button>
                     <button
                         onClick={() => router.push("/field/ar")}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 transition active:scale-95"
@@ -1073,8 +1261,16 @@ function FieldCorrectionContent() {
                                     </button>
                                 </div>
                             </span>
-                            <input className="w-full text-sm p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
-                                value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="예: 구리시 한양아파트" />
+                            <div className="flex gap-2">
+                                <input className="flex-1 text-sm p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+                                    value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder="예: 구리시 한양아파트" />
+                                <button
+                                    onClick={() => setAddressModalOpen(true)}
+                                    className="px-3 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition text-sm whitespace-nowrap"
+                                >
+                                    🔍 주소검색
+                                </button>
+                            </div>
                             {addressLat && addressLng && (
                                 <p className="text-xs text-slate-500 mt-1">
                                     📍 위도: {addressLat.toFixed(6)}, 경도: {addressLng.toFixed(6)}
@@ -1146,6 +1342,16 @@ function FieldCorrectionContent() {
                                 <option value="좌→우 열림">좌 → 우 열림</option>
                                 <option value="우→좌 열림">우 → 좌 열림</option>
                             </select>
+                        </label>
+                        <label className="block">
+                            <span className="text-xs font-bold text-slate-500 block mb-1">도어 색상 (프레임)</span>
+                            <input className="w-full text-sm p-3 bg-white border border-slate-200 rounded-lg outline-none"
+                                value={doorColor} onChange={e => setDoorColor(e.target.value)} placeholder="예: 화이트, 블랙, 우드" />
+                        </label>
+                        <label className="block col-span-1 sm:col-span-2">
+                            <span className="text-xs font-bold text-slate-500 block mb-1">추가 부자재</span>
+                            <input className="w-full text-sm p-3 bg-white border border-slate-200 rounded-lg outline-none"
+                                value={addMaterials} onChange={e => setAddMaterials(e.target.value)} placeholder="예: 상부 마감재 100x100, 실리콘 추가" />
                         </label>
                     </div>
 
@@ -1349,22 +1555,22 @@ function FieldCorrectionContent() {
                             * 최소 7일 이후 날짜부터 선택 가능합니다.
                         </p>
                     </div>
-                </section>
+                </section >
 
                 {/* 6. Memo */}
-                <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                < section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" >
                     <h2 className="text-sm font-bold text-slate-900 mb-2">현장 특이사항</h2>
                     <textarea
                         className="w-full bg-slate-50 p-3 rounded-lg text-sm outline-none border border-slate-200 focus:border-slate-400 min-h-[100px]"
                         value={siteMemo} onChange={e => setSiteMemo(e.target.value)}
                         placeholder="예) 오픈형이라 추가 자재 필요, 벽면 수평 불량 등"
                     />
-                </section>
+                </section >
 
                 {/* 5.5. Payment & Estimation */}
-                <section className="space-y-4">
+                < section className="space-y-4" >
                     {/* NEW: Price Estimation Card (Visible Auto-Calc) */}
-                    <div className="bg-indigo-900 text-white rounded-xl p-5 shadow-lg relative overflow-hidden">
+                    < div className="bg-indigo-900 text-white rounded-xl p-5 shadow-lg relative overflow-hidden" >
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Check size={80} />
                         </div>
@@ -1393,10 +1599,10 @@ function FieldCorrectionContent() {
                                 <span className="text-2xl font-black text-yellow-300">{estimatedPrice.toLocaleString()}원</span>
                             </div>
                         </div>
-                    </div>
+                    </div >
 
                     {/* Payment Request Box */}
-                    <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm relative">
+                    < div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm relative" >
                         <div className="absolute -top-3 left-4 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded">
                             결제 요청 생성
                         </div>
@@ -1408,96 +1614,164 @@ function FieldCorrectionContent() {
                             installFee={installFee}
                             materialCost={materialCost}
                         />
-                    </div>
-                </section>
+                    </div >
+                </section >
 
                 {/* 6. Summary Block */}
-                <div className="bg-slate-100 rounded-xl p-4 text-xs space-y-1 text-slate-600 font-mono">
+                < div className="bg-slate-100 rounded-xl p-4 text-xs space-y-1 text-slate-600 font-mono" >
                     <div>• 고객: {customerName} ({customerPhone})</div>
                     <div>• 제품: {category} - {detail}</div>
                     <div>• 사이즈: {confirmedWidth || '-'} x {confirmedHeight || '-'}</div>
                     <div className="text-[10px] text-slate-400 pt-2">* "전송하기"를 누르면 사무실(카톡공유)과 고객문자 발송이 진행됩니다.</div>
-                </div>
+                </div >
 
-            </main>
+            </main >
 
             {/* Actions */}
-            <div className="fixed bottom-0 left-0 right-0 p-3 bg-white border-t flex gap-2 z-10 safe-bottom">
-                <button onClick={() => send("office")}
+            < div className="fixed bottom-0 left-0 right-0 p-3 bg-white border-t flex gap-2 z-[100] safe-bottom" >
+                <button onClick={() => setShowShareModal(true)}
                     className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl active:scale-95 transition flex justify-center items-center gap-2">
                     사무실 공유
                 </button>
-                <button onClick={() => send("both")}
+                <button onClick={() => send("both", "full")}
                     className="flex-[2] py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition flex justify-center items-center gap-2">
                     <Send size={18} className="-ml-1" />
                     고객 전송 (+완료처리)
                 </button>
-            </div>
+            </div >
+
+            {/* Office Share Selection Modal */}
+            {
+                showShareModal && (
+                    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200 relative">
+                            <button
+                                onClick={() => setShowShareModal(false)}
+                                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition"
+                            >
+                                <X size={24} />
+                            </button>
+                            <h3 className="text-lg font-bold text-center mb-6">사무실 공유 방식 선택</h3>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        send("office", "db_only");
+                                        setShowShareModal(false);
+                                    }}
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-indigo-700 transition"
+                                >
+                                    <CloudUpload size={24} />
+                                    <div>
+                                        <div className="text-base">프로그램 전송</div>
+                                        <div className="text-[10px] font-normal opacity-70">관리자 페이지 저장 (DB)</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        send("office", "share_only");
+                                        setShowShareModal(false);
+                                    }}
+                                    className="w-full py-4 bg-yellow-400 text-slate-900 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-yellow-500 transition"
+                                >
+                                    <MessageCircle size={24} />
+                                    <div>
+                                        <div className="text-base">문자/카톡 공유</div>
+                                        <div className="text-[10px] font-normal opacity-70">텍스트 복사 및 공유창</div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setShowShareModal(false)}
+                                className="w-full mt-4 py-3 text-slate-400 font-medium hover:text-slate-600"
+                            >
+                                취소
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* === COMPARISON MODAL === */}
             {/* AI Modal */}
-            {aiResult && aiResult.status !== 'ok' && (
-                <AIValidationModal
-                    result={aiResult}
-                    onClose={() => setAiResult(null)}
-                    onProceed={handleConfirmAI}
-                />
-            )}
+            {
+                aiResult && aiResult.status !== 'ok' && (
+                    <AIValidationModal
+                        result={aiResult}
+                        onClose={() => setAiResult(null)}
+                        onProceed={handleConfirmAI}
+                    />
+                )
+            }
 
             {/* Comparison Modal */}
-            {showComparisonModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-slate-100 w-full max-w-lg h-[85vh] sm:h-auto sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-                        <div className="bg-white border-b p-4 flex justify-between items-center">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Eye size={18} className="text-indigo-600" /> 데이터 비교</h3>
-                            <button onClick={() => setShowComparisonModal(false)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800"><X size={24} /></button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                            {/* Visual Overlay */}
-                            <div className="relative w-full aspect-[3/4] bg-slate-200 rounded-xl overflow-hidden border shadow-inner">
-                                <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(0,0,0,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="absolute" style={{ width: `${consumerW / 5}px`, height: `${consumerH / 5}px`, opacity: 0.4, filter: "sepia(1) hue-rotate(180deg) saturate(2)", transform: "translate(-10px, -10px)" }}>
-                                        <DoorModel type={arDoorType} frameColor={targetOrder.arData?.consumer?.frameColor as FrameColor || "화이트"} glassType={targetOrder.arData?.consumer?.glassType as GlassType || "투명"} width={consumerW} height={consumerH} />
-                                    </div>
-                                    <div className="absolute" style={{ width: `${fW / 5}px`, height: `${fH / 5}px`, opacity: 0.8, border: "2px dashed blue" }}>
-                                        <DoorModel type={arDoorType} frameColor={targetOrder.arData?.consumer?.frameColor as FrameColor || "화이트"} glassType={targetOrder.arData?.consumer?.glassType as GlassType || "투명"} width={fW} height={fH} />
-                                    </div>
-                                </div>
+            {
+                showComparisonModal && (
+                    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+                        <div className="bg-slate-100 w-full max-w-lg h-[85vh] sm:h-auto sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+                            <div className="bg-white border-b p-4 flex justify-between items-center">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Eye size={18} className="text-indigo-600" /> 데이터 비교</h3>
+                                <button onClick={() => setShowComparisonModal(false)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800"><X size={24} /></button>
                             </div>
-                            {/* Info Grid */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                    <div className="text-[10px] uppercase font-bold text-blue-500 mb-1">Consumer</div>
-                                    <div className="text-sm font-mono text-blue-900">W: {consumerW}<br />H: {consumerH}</div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {/* Visual Overlay */}
+                                <div className="relative w-full aspect-[3/4] bg-slate-200 rounded-xl overflow-hidden border shadow-inner">
+                                    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(0,0,0,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="absolute" style={{ width: `${consumerW / 5}px`, height: `${consumerH / 5}px`, opacity: 0.4, filter: "sepia(1) hue-rotate(180deg) saturate(2)", transform: "translate(-10px, -10px)" }}>
+                                            <DoorModel type={arDoorType} frameColor={targetOrder.arData?.consumer?.frameColor as FrameColor || "화이트"} glassType={targetOrder.arData?.consumer?.glassType as GlassType || "투명"} width={consumerW} height={consumerH} />
+                                        </div>
+                                        <div className="absolute" style={{ width: `${fW / 5}px`, height: `${fH / 5}px`, opacity: 0.8, border: "2px dashed blue" }}>
+                                            <DoorModel type={arDoorType} frameColor={targetOrder.arData?.consumer?.frameColor as FrameColor || "화이트"} glassType={targetOrder.arData?.consumer?.glassType as GlassType || "투명"} width={fW} height={fH} />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Field</div>
-                                    <div className="text-sm font-mono text-slate-900">W: {fW || "-"}<br />H: {fH || "-"}</div>
+                                {/* Info Grid */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                        <div className="text-[10px] uppercase font-bold text-blue-500 mb-1">Consumer</div>
+                                        <div className="text-sm font-mono text-blue-900">W: {consumerW}<br />H: {consumerH}</div>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Field</div>
+                                        <div className="text-sm font-mono text-slate-900">W: {fW || "-"}<br />H: {fH || "-"}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
+
+            <AddressSearchModal
+                isOpen={addressModalOpen}
+                onClose={() => setAddressModalOpen(false)}
+                onComplete={(data) => setCustomerAddress(data.address)}
+            />
 
             {/* Map Picker Modal */}
-            {showMapPicker && (
-                <NaverMapPicker
-                    onConfirm={handleMapConfirm}
-                    onClose={() => setShowMapPicker(false)}
-                    initialAddress={customerAddress}
-                />
-            )}
-        </div>
+            {
+                showMapPicker && (
+                    <NaverMapPicker
+                        onConfirm={handleMapConfirm}
+                        onClose={() => setShowMapPicker(false)}
+                        initialAddress={customerAddress}
+                    />
+                )
+            }
+        </div >
     );
 }
 
 export default function FieldCorrectionPage() {
     return (
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading Field Tool...</div>}>
-            <FieldCorrectionContent />
+            <DemoGuard>
+                <FieldCorrectionContent />
+            </DemoGuard>
         </Suspense>
     );
 }

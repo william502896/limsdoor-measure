@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default function AdminScheduleRedirect() {
-    redirect("/schedule");
+import CalendarView from "@/app/components/Manage/CalendarView";
+
+export default function SchedulePage() {
+    return (
+        <div className="h-[calc(100vh-64px)] overflow-hidden">
+            <CalendarView />
+        </div>
+    );
 }

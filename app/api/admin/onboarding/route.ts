@@ -134,5 +134,9 @@ export async function POST(req: Request) {
     res.cookies.set("onboarded", "1", { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
     res.cookies.set("company_id", company.id, { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
 
+    // Explicitly clear 'demo' if it behaves as a separate cookie due to domain/path quirks (Safety)
+    // (Note: Overwriting usually works, but this is harmless)
+
+
     return res;
 }

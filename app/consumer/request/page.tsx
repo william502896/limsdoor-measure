@@ -3,6 +3,8 @@
 import { useState } from "react";
 import AddressSearch, { SearchSelect } from "@/app/components/AddressSearch";
 import NaverMapViewer from "@/app/components/NaverMapViewer";
+import DemoGuard from "@/app/components/DemoGuard";
+import { useDemoLimit } from "@/app/hooks/useDemoLimit";
 
 /**
  * Consumer Request Page - Simple address confirmation + consultation request  
@@ -11,6 +13,7 @@ import NaverMapViewer from "@/app/components/NaverMapViewer";
  * - Minimal friction for customer onboarding
  */
 export default function ConsumerRequestPage() {
+    const { recordAction } = useDemoLimit();
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
 
@@ -30,6 +33,11 @@ export default function ConsumerRequestPage() {
     async function submit() {
         if (!addressText || lat == null || lng == null) {
             alert("주소 검색으로 위치를 먼저 확정해주세요.");
+            return;
+        }
+
+        if (!recordAction()) {
+            alert("일일 데모 사용 한도(5회)를 초과했습니다.");
             return;
         }
 
@@ -60,43 +68,45 @@ export default function ConsumerRequestPage() {
     }
 
     return (
-        <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
-            <h2 style={{ marginBottom: 8 }}>소비자(고객) — 주소 확정 & 상담 요청</h2>
-            <div style={{ opacity: 0.75, marginBottom: 12, fontSize: 14 }}>
-                💡 주소는 "검색으로 확정"만 가능 (핀 이동 ❌) - 오입력 방지
+        <DemoGuard>
+            <div style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
+                <h2 style={{ marginBottom: 8 }}>소비자(고객) — 주소 확정 & 상담 요청</h2>
+                <div style={{ opacity: 0.75, marginBottom: 12, fontSize: 14 }}>
+                    💡 주소는 "검색으로 확정"만 가능 (핀 이동 ❌) - 오입력 방지
+                </div>
+
+                <div style={{ display: "grid", gap: 10 }}>
+                    <input
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="고객명"
+                        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+                    />
+                    <input
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="연락처"
+                        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
+                    />
+
+                    <AddressSearch onSelect={onSelect} />
+
+                    {lat != null && lng != null && (
+                        <>
+                            <div style={{ marginTop: 6, fontSize: 14 }}>
+                                <b>📍 확정 주소:</b> {addressText}
+                            </div>
+                            <NaverMapViewer lat={lat} lng={lng} />
+                        </>
+                    )}
+
+                    <button type="button" onClick={submit} disabled={saving} style={{ padding: "12px 14px" }}>
+                        {saving ? "전송중..." : "📨 상담/견적 요청하기"}
+                    </button>
+
+                    {result && <div style={{ marginTop: 10, fontSize: 14 }}>{result}</div>}
+                </div>
             </div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-                <input
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="고객명"
-                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
-                />
-                <input
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="연락처"
-                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)" }}
-                />
-
-                <AddressSearch onSelect={onSelect} />
-
-                {lat != null && lng != null && (
-                    <>
-                        <div style={{ marginTop: 6, fontSize: 14 }}>
-                            <b>📍 확정 주소:</b> {addressText}
-                        </div>
-                        <NaverMapViewer lat={lat} lng={lng} />
-                    </>
-                )}
-
-                <button type="button" onClick={submit} disabled={saving} style={{ padding: "12px 14px" }}>
-                    {saving ? "전송중..." : "📨 상담/견적 요청하기"}
-                </button>
-
-                {result && <div style={{ marginTop: 10, fontSize: 14 }}>{result}</div>}
-            </div>
-        </div>
+        </DemoGuard>
     );
 }

@@ -30,7 +30,8 @@ export default function Tier1LoginPage() {
             return;
         }
 
-        router.replace(nextPath);
+        // Force reload to ensure cookies update in Layout/Middleware
+        window.location.href = nextPath;
     }
 
     return (

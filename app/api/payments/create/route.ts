@@ -26,6 +26,7 @@ export async function POST(req: Request) {
         const amount: number = Number(body.amount ?? 0);
         const memo: string | undefined = body.memo;
         const method: string = body.method ?? "PAYHERE_LINK"; // "CASH", "PAYHERE_LINK", etc.
+        const leadId: string | undefined = body.leadId;
 
         if (!estimateId) {
             return NextResponse.json({ ok: false, error: "estimateId is required" }, { status: 400 });
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
                 status: "CREATED",
                 expire_at: endOfTodayKST(),
                 memo,
+                lead_id: leadId,
             })
             .select("*")
             .single();

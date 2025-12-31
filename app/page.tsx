@@ -36,7 +36,7 @@ export default function RootRedirector() {
 
   }, [user, loaded, router]);
 
-  if (!loaded) return <div className="h-screen flex items-center justify-center text-slate-400">Loading System...</div>;
+  if (!loaded) return <div suppressHydrationWarning className="h-screen flex items-center justify-center text-slate-400">시스템 로딩 중...</div>;
 
   if (!user) {
     return (
