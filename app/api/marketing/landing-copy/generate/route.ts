@@ -11,7 +11,7 @@ function assertEnv(name: string) {
     return v;
 }
 
-const GEMINI_API_KEY = assertEnv("GEMINI_API_KEY");
+// const GEMINI_API_KEY moved to runtime check inside geminiGenerate
 
 // Gemini generateContent (Google AI for Developers)
 // 인증: x-goog-api-key 헤더 :contentReference[oaicite:2]{index=2}
@@ -60,6 +60,7 @@ async function geminiGenerate(params: {
 
     // gemini-2.5-flash 계열이 일반적으로 빠르고 비용 효율적 (모델은 환경에 따라 바꿔도 됨)
     const model = "gemini-2.5-flash";
+    const GEMINI_API_KEY = assertEnv("GEMINI_API_KEY");
 
     const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
