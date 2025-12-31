@@ -54,7 +54,7 @@ export default function ContractList() {
             if (custError) console.error("Debug: Customer Fetch Error:", custError);
 
             if (customersData) {
-                customersData.forEach(c => {
+                customersData.forEach((c: any) => {
                     customerMap[c.id] = c;
                 });
             }
@@ -100,7 +100,7 @@ export default function ContractList() {
                 id: s.id,
                 customerId: s.customer_id || "unknown",
                 type: s.status?.toLowerCase() === 'completed' ? 'completed' : (['scheduled', 'measured'].includes(s.status?.toLowerCase()) ? 'contract' : 'estimate'),
-                status: (s.status?.toUpperCase() === 'MEASURED') ? 'MEASURED' : ((s.status?.toUpperCase() === 'SCHEDULED') ? 'SCHEDULED' : 'PENDING'),
+                status: (s.status?.toUpperCase() === 'MEASURED') ? 'MEASURED' : ((s.status?.toUpperCase() === 'SCHEDULED') ? 'INSTALL_SCHEDULED' : 'MEASURE_REQUESTED'),
                 title: s.title || "견적 문의",
                 items: parsedItems,
                 totalPrice: 0,
