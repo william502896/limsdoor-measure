@@ -1,22 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
-/**
- * Supabase Admin Client (Service Role)
- * - Bypasses RLS policies
- * - Server-side only
- * - Use for admin operations and MVP workflows
- */
-export function supabaseAdmin() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export const supabaseAdmin = () => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-    if (!url || !key) {
-        throw new Error("Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !serviceRoleKey) {
+        throw new Error("Missing Supabase URL or Service Role Key");
     }
 
-    return createClient(url, key, {
+    return createClient(url, serviceRoleKey, {
         auth: {
+            autoRefreshToken: false,
             persistSession: false,
         },
     });
-}
+};

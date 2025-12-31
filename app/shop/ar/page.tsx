@@ -18,11 +18,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* ===============================
    Door assets (public/doors)
 ================================ */
-type DoorAsset = { id: string; label: string; src: string };
+type DoorCategory = "3연동" | "원슬라이딩" | "스윙" | "호폐" | "파티션";
+type FrameColor = "블랙" | "화이트" | "브론즈" | "실버";
+type GlassType = "투명강화" | "샤틴" | "다크" | "브론즈" | "플루트" | "특수";
+
+type DoorAsset = {
+    id: string;
+    label: string;
+    src: string;
+    category: DoorCategory;
+    frame: FrameColor;
+    glass: GlassType;
+};
 
 const DOORS: DoorAsset[] = [
-    { id: "3t_black_clear", label: "3연동 | 블랙 | 투명강화", src: "/doors/3t_black_clear.png" },
-    { id: "oneslide_white_satin", label: "원슬라이딩 | 화이트 | 샤틴", src: "/doors/oneslide_white_satin.png" },
+    { id: "3t_black_clear", label: "3연동 | 블랙 | 투명강화", src: "/doors/3t_black_clear.png", category: "3연동", frame: "블랙", glass: "투명강화" },
+    { id: "oneslide_white_satin", label: "원슬라이딩 | 화이트 | 샤틴", src: "/doors/oneslide_white_satin.png", category: "원슬라이딩", frame: "화이트", glass: "샤틴" },
     // 필요하면 계속 추가
 ];
 
@@ -269,7 +280,37 @@ export default function DoorCompositePage() {
     const [bgFile, setBgFile] = useState<File | null>(null);
     const [bgUrl, setBgUrl] = useState<string>("");
 
+    // Filtering State
+    const [selCategory, setSelCategory] = useState<DoorCategory>("3연동");
+    const [selFrame, setSelFrame] = useState<FrameColor>("블랙");
+    const [selGlass, setSelGlass] = useState<GlassType>("투명강화");
+
+    // Upload/Share State
+    const [estimateId, setEstimateId] = useState<string>("");
+    const [uploadedUrl, setUploadedUrl] = useState<string>("");
+    const [isUploading, setIsUploading] = useState<boolean>(false);
+
     const [doorId, setDoorId] = useState<string>(DOORS[0]?.id ?? "");
+
+    // Filter Logic
+    const filteredDoors = useMemo(() => {
+        const list = DOORS.filter(d =>
+            d.category === selCategory &&
+            d.frame === selFrame &&
+            d.glass === selGlass
+        );
+        return list.length ? list : DOORS; // 매칭 없으면 전체 표시(막힘 방지)
+    }, [selCategory, selFrame, selGlass]);
+
+    useEffect(() => {
+        // 현재 doorId가 필터 결과에 없으면 첫 번째로 자동 변경
+        if (!filteredDoors.some(d => d.id === doorId)) {
+            setDoorId(filteredDoors[0]?.id ?? DOORS[0]?.id ?? "");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredDoors]);
+
+
     const door = useMemo(() => DOORS.find(d => d.id === doorId) ?? DOORS[0], [doorId]);
 
     const [opacity, setOpacity] = useState<number>(0.9);
@@ -509,6 +550,73 @@ export default function DoorCompositePage() {
         a.click();
     }
 
+    // --- Upload & Share Functions ---
+    function getCanvasDataUrl(): string | null {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        return canvas.toDataURL("image/png");
+    }
+
+    async function uploadToSupabase() {
+        const dataUrl = getCanvasDataUrl();
+        if (!dataUrl) return;
+
+        setIsUploading(true);
+        setUploadedUrl("");
+        try {
+            const res = await fetch("/api/composite/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ dataUrl, estimateId: estimateId.trim() || undefined }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.error ?? "Upload failed");
+            setUploadedUrl(json.url);
+        } catch (e: any) {
+            alert(e?.message ?? "업로드 실패");
+        } finally {
+            setIsUploading(false);
+        }
+    }
+
+    async function shareKakaoOrSystem() {
+        if (!uploadedUrl) {
+            alert("먼저 업로드를 해주세요.");
+            return;
+        }
+
+        // 1) 모바일/지원 브라우저: 시스템 공유(카카오/문자/앱 선택)
+        // 2) 미지원: URL 복사
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: "림스도어 합성 이미지",
+                    text: "합성 결과 확인 링크입니다.",
+                    url: uploadedUrl,
+                });
+                return;
+            }
+        } catch {
+            // 사용자가 취소했을 수도 있음 -> 아래 복사로 fallback
+        }
+
+        await navigator.clipboard.writeText(uploadedUrl);
+        alert("링크를 복사했습니다. 카카오톡에 붙여넣어 전송하세요.");
+    }
+
+    function sendSmsWithLink(phone?: string) {
+        if (!uploadedUrl) {
+            alert("먼저 업로드를 해주세요.");
+            return;
+        }
+        // sms 스킴은 “이미지 첨부”는 못 하고, 링크를 자동 입력하는 용도입니다.
+        const msg = encodeURIComponent(`림스도어 합성 이미지 링크: ${uploadedUrl}`);
+        const to = (phone ?? "").replace(/[^0-9]/g, "");
+        const href = to ? `sms:${to}?body=${msg}` : `sms:?body=${msg}`;
+        window.location.href = href;
+    }
+
+
     return (
         <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
             <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>도어 합성(현장 사진 + 도어 PNG)</h1>
@@ -544,13 +652,29 @@ export default function DoorCompositePage() {
 
                     <hr style={{ margin: "12px 0", opacity: 0.2 }} />
 
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>2) 도어 선택</div>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>2) 옵션 선택(자동 필터)</div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                        <select value={selCategory} onChange={(e) => setSelCategory(e.target.value as any)} style={{ width: "100%", padding: "8px 10px", borderRadius: 10, color: 'black', border: "1px solid rgba(0,0,0,0.15)" }}>
+                            {(["3연동", "원슬라이딩", "스윙", "호폐", "파티션"] as DoorCategory[]).map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+
+                        <select value={selFrame} onChange={(e) => setSelFrame(e.target.value as any)} style={{ width: "100%", padding: "8px 10px", borderRadius: 10, color: 'black', border: "1px solid rgba(0,0,0,0.15)" }}>
+                            {(["블랙", "화이트", "브론즈", "실버"] as FrameColor[]).map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+
+                        <select value={selGlass} onChange={(e) => setSelGlass(e.target.value as any)} style={{ width: "100%", padding: "8px 10px", borderRadius: 10, color: 'black', border: "1px solid rgba(0,0,0,0.15)" }}>
+                            {(["투명강화", "샤틴", "다크", "브론즈", "플루트", "특수"] as GlassType[]).map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                    </div>
+
+                    <div style={{ marginTop: 10, fontWeight: 700, marginBottom: 8 }}>도어 PNG 선택</div>
                     <select
                         value={doorId}
                         onChange={(e) => setDoorId(e.target.value)}
                         style={{ width: "100%", padding: "8px 10px", borderRadius: 10, color: 'black' }}
                     >
-                        {DOORS.map((d) => (
+                        {filteredDoors.map((d) => (
                             <option key={d.id} value={d.id}>
                                 {d.label}
                             </option>
@@ -604,6 +728,96 @@ export default function DoorCompositePage() {
                             결과 다운로드
                         </button>
                     </div>
+
+                    <hr style={{ margin: "12px 0", opacity: 0.2 }} />
+
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>3) 전송(업로드 → 공유)</div>
+
+                    <input
+                        value={estimateId}
+                        onChange={(e) => setEstimateId(e.target.value)}
+                        placeholder="(선택) 실측/견적 ID 예: 20260101-001"
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", color: "black" }}
+                    />
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                        <button
+                            onClick={uploadToSupabase}
+                            disabled={isUploading}
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.15)",
+                                background: isUploading ? "rgba(0,0,0,0.05)" : "white",
+                                cursor: isUploading ? "not-allowed" : "pointer",
+                                fontWeight: 800,
+                                color: "black"
+                            }}
+                        >
+                            {isUploading ? "업로드 중..." : "업로드"}
+                        </button>
+
+                        <button
+                            onClick={shareKakaoOrSystem}
+                            disabled={!uploadedUrl}
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.15)",
+                                background: !uploadedUrl ? "rgba(0,0,0,0.05)" : "white",
+                                cursor: !uploadedUrl ? "not-allowed" : "pointer",
+                                fontWeight: 800,
+                                color: "black"
+                            }}
+                        >
+                            카카오/공유
+                        </button>
+
+                        <button
+                            onClick={() => sendSmsWithLink()}
+                            disabled={!uploadedUrl}
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.15)",
+                                background: !uploadedUrl ? "rgba(0,0,0,0.05)" : "white",
+                                cursor: !uploadedUrl ? "not-allowed" : "pointer",
+                                fontWeight: 800,
+                                color: "black"
+                            }}
+                        >
+                            문자로 전송
+                        </button>
+                    </div>
+
+                    {uploadedUrl ? (
+                        <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
+                            <div style={{ fontWeight: 700 }}>업로드 완료 URL</div>
+                            <div style={{ wordBreak: "break-all" }}>{uploadedUrl}</div>
+                            <button
+                                onClick={async () => {
+                                    await navigator.clipboard.writeText(uploadedUrl);
+                                    alert("링크 복사 완료");
+                                }}
+                                style={{
+                                    marginTop: 8,
+                                    padding: "8px 10px",
+                                    borderRadius: 10,
+                                    border: "1px solid rgba(0,0,0,0.15)",
+                                    background: "white",
+                                    cursor: "pointer",
+                                    fontWeight: 700,
+                                    color: "black"
+                                }}
+                            >
+                                링크 복사
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7, lineHeight: 1.5 }}>
+                            먼저 업로드를 누르면 공유/문자 버튼이 활성화됩니다.
+                        </div>
+                    )}
 
                     <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7, lineHeight: 1.5 }}>
                         ✅ 팁: 점 4개를 <b>문틀의 실제 모서리</b>에 최대한 정확히 맞추면,
