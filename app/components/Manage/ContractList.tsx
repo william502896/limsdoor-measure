@@ -41,7 +41,7 @@ export default function ContractList() {
         }
 
         // 2. Extract Customer IDs for Manual Join
-        const customerIds = Array.from(new Set(schedules.map(s => s.customer_id).filter(Boolean)));
+        const customerIds = Array.from(new Set(schedules.map((s: any) => s.customer_id).filter(Boolean)));
 
         // 3. Fetch Related Customers
         let customerMap: Record<string, any> = {};

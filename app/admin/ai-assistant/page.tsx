@@ -7,13 +7,15 @@ import {
     CheckCircle, Server, Activity, Globe, Target, TrendingUp, Newspaper
 } from "lucide-react";
 
+interface Message {
+    role: "user" | "ai";
+    text: string;
+    type?: "text" | "analysis" | "news" | "strategy";
+    data?: any;
+}
+
 export default function AiAssistantPage() {
-    const [messages, setMessages] = useState<{
-        role: "user" | "ai",
-        text: string,
-        type?: "text" | "analysis" | "news" | "strategy",
-        data?: any
-    }>([
+    const [messages, setMessages] = useState<Message[]>([
         { role: "ai", text: "반갑습니다. 최고 관리자님.\n민감 정보를 포함한 모든 사내 데이터 베이스 및 글로벌 마켓 데이터에 연결되었습니다.\n무엇을 도와드릴까요?", type: "text" }
     ]);
     const [input, setInput] = useState("");
