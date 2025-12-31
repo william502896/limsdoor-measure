@@ -43,6 +43,15 @@ const createStub = (message: string) => {
             return chanStub;
         },
 
+        // Auth Stub Logic
+        auth: {
+            getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+            getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => { } } } }),
+            signInWithPassword: () => Promise.resolve({ data: {}, error: { message: message } }),
+            signOut: () => Promise.resolve({ error: null }),
+        },
+
         // Promise interface to make it awaitable
         then: (resolve: any) => resolve({ data: [], error: { message }, count: 0 })
     };
