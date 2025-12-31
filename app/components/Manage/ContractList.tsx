@@ -99,7 +99,7 @@ export default function ContractList() {
             mappedOrders.push({
                 id: s.id,
                 customerId: s.customer_id || "unknown",
-                type: s.status?.toLowerCase() === 'completed' ? 'completed' : (['scheduled', 'measured'].includes(s.status?.toLowerCase()) ? 'contract' : 'estimate'),
+                // type property removed
                 status: (s.status?.toUpperCase() === 'MEASURED') ? 'MEASURED' : ((s.status?.toUpperCase() === 'SCHEDULED') ? 'INSTALL_SCHEDULED' : 'MEASURE_REQUESTED'),
                 title: s.title || "견적 문의",
                 items: parsedItems,
