@@ -441,13 +441,13 @@ export default function AdminOnboardingPage() {
                                         <div className="text-xs text-slate-500">현장 실측 시뮬레이션</div>
                                     </div>
                                 </Link>
-                                <Link href="/consumer/request" className="bg-white/60 hover:bg-white p-4 rounded-2xl border border-white/50 transition-all hover:scale-[1.02] flex items-center gap-4 group">
+                                <Link href="/shop" className="bg-white/60 hover:bg-white p-4 rounded-2xl border border-white/50 transition-all hover:scale-[1.02] flex items-center gap-4 group">
                                     <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                                         👤
                                     </div>
                                     <div className="text-left">
                                         <div className="font-bold text-slate-800 group-hover:text-pink-600 transition-colors">고객 앱</div>
-                                        <div className="text-xs text-slate-500">견적 요청 및 AR</div>
+                                        <div className="text-xs text-slate-500">쇼핑몰 및 AR</div>
                                     </div>
                                 </Link>
                                 <Link href="/install" className="bg-white/60 hover:bg-white p-4 rounded-2xl border border-white/50 transition-all hover:scale-[1.02] flex items-center gap-4 group">
