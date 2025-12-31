@@ -44,7 +44,7 @@ export default function ContractList() {
         const customerIds = Array.from(new Set(schedules.map((s: any) => s.customer_id).filter(Boolean)));
 
         // 3. Fetch Related Customers
-        let customerMap: Record<string, any> = {};
+        const customerMap: Record<string, any> = {};
         if (customerIds.length > 0) {
             const { data: customersData, error: custError } = await supabase
                 .from("crm_customers")

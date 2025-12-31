@@ -136,7 +136,7 @@ function ConsumerArContent() {
     React.useEffect(() => {
         if (step === "camera") startCamera().catch(() => { });
         if (step !== "camera") stopCamera();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [step]);
 
     return (

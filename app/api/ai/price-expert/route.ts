@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         }));
 
         // 3. Gemini History Format
-        let history = messages.slice(0, -1).map((msg: any) => ({
+        const history = messages.slice(0, -1).map((msg: any) => ({
             role: msg.role === "assistant" ? "model" : "user",
             parts: [{ text: msg.content as string }]
         }));
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         const userPrompt = lastMessage.content;
 
         // 4. System Prompt
-        let systemPrompt = `
+        const systemPrompt = `
 당신은 '림스도어'의 **단가 분석 비서 AI**입니다.
 아래 제공된 '업체별 단가 데이터'를 기반으로 사용자의 질문에 정확한 가격 정보를 답변해주세요.
 

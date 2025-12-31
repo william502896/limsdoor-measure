@@ -174,7 +174,7 @@ export function calculateFinalSalePrice(params: {
 
     const breakdown: SalePriceBreakdownLine[] = [];
 
-    let pre = Math.max(0, saleBase + saleAdd);
+    const pre = Math.max(0, saleBase + saleAdd);
     let cur = pre;
 
     for (const rule of rules) {

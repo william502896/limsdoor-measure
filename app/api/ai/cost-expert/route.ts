@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Convert messages to Gemini format
-        let history = messages.slice(0, -1).map((msg: any) => ({
+        const history = messages.slice(0, -1).map((msg: any) => ({
             role: msg.role === "assistant" ? "model" : "user",
             parts: [{ text: msg.content as string }]
         }));
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         const userPrompt = lastMessage.content;
 
         // System Prompt Construction with Context
-        let systemPrompt = `
+        const systemPrompt = `
 당신은 '림스도어(Limsdoor)'의 **최고 세무/경비 관리 전문가 AI**입니다. 
 당신의 목표는 사장님이 입력한 재무 데이터를 바탕으로 **가장 합법적이고 효과적인 절세 방안**과 **비용 관리 조언**을 제공하는 것입니다.
 

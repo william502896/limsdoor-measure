@@ -116,7 +116,7 @@ export default function RadioClient({ initialChannel, onClose, isModal = false }
         }
 
         // Initialize Channel from Props or URL
-        let initCh = initialChannel || searchParams.get('channel');
+        const initCh = initialChannel || searchParams.get('channel');
         if (initCh) {
             if (initCh.startsWith("채널") || initCh.startsWith("Channel")) {
                 setChannelId(initCh);

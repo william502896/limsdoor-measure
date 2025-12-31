@@ -369,8 +369,8 @@ async function createCustomerPdf(payload: MeasurementPayload) {
         const p2 = pdfDoc.addPage([595.28, 841.89]);
         drawTextOnPage(p2, font, margin, 841.89 - margin, "현장 사진(일부)", 16);
 
-        let px = margin;
-        let py2 = 841.89 - margin - 30;
+        const px = margin;
+        const py2 = 841.89 - margin - 30;
 
         for (let i = 0; i < photos.length; i++) {
             const src = photos[i];

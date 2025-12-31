@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Upload } from "lucide-react";
+import { createSupabaseBrowser } from "@/app/lib/supabaseClient";
 
 /**
  * ✅ 림스도어 실측앱 "도어 합성" (사진 + 도어 PNG) 퍼스펙티브(원근) 합성
@@ -290,28 +292,65 @@ export default function DoorCompositePage() {
     const [uploadedUrl, setUploadedUrl] = useState<string>("");
     const [isUploading, setIsUploading] = useState<boolean>(false);
 
+    // Dynamic Doors State
+    const [allDoors, setAllDoors] = useState<DoorAsset[]>(DOORS);
+
     const [doorId, setDoorId] = useState<string>(DOORS[0]?.id ?? "");
+
+    // Fetch DB Doors
+    useEffect(() => {
+        const supabase = createSupabaseBrowser();
+        async function fetchDoors() {
+            const { data } = await supabase
+                .from("marketing_assets")
+                .select("*")
+                .eq("category", "ar_door");
+
+            if (data && data.length > 0) {
+                const dbDoors: DoorAsset[] = data.map((d: any) => ({
+                    id: d.id,
+                    label: `${d.metadata?.category || '기타'} | ${d.metadata?.frame || '기타'} | ${d.metadata?.glass || '기타'}`,
+                    src: d.file_url,
+                    category: d.metadata?.category || "3연동",
+                    frame: d.metadata?.frame || "블랙",
+                    glass: d.metadata?.glass || "투명강화"
+                }));
+                // Merge with default, removing duplicates if any (by id)
+                const merged = [...DOORS, ...dbDoors].reduce((acc, current) => {
+                    const x = acc.find(item => item.id === current.id);
+                    if (!x) {
+                        return acc.concat([current]);
+                    } else {
+                        return acc;
+                    }
+                }, [] as DoorAsset[]);
+
+                setAllDoors(merged);
+            }
+        }
+        fetchDoors();
+    }, []);
 
     // Filter Logic
     const filteredDoors = useMemo(() => {
-        const list = DOORS.filter(d =>
+        const list = allDoors.filter(d =>
             d.category === selCategory &&
             d.frame === selFrame &&
             d.glass === selGlass
         );
-        return list.length ? list : DOORS; // 매칭 없으면 전체 표시(막힘 방지)
-    }, [selCategory, selFrame, selGlass]);
+        return list.length ? list : allDoors;
+    }, [allDoors, selCategory, selFrame, selGlass]);
 
     useEffect(() => {
         // 현재 doorId가 필터 결과에 없으면 첫 번째로 자동 변경
         if (!filteredDoors.some(d => d.id === doorId)) {
-            setDoorId(filteredDoors[0]?.id ?? DOORS[0]?.id ?? "");
+            setDoorId(filteredDoors[0]?.id ?? allDoors[0]?.id ?? "");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filteredDoors]);
 
 
-    const door = useMemo(() => DOORS.find(d => d.id === doorId) ?? DOORS[0], [doorId]);
+    const door = useMemo(() => allDoors.find(d => d.id === doorId) ?? allDoors[0], [doorId, allDoors]);
 
     const [opacity, setOpacity] = useState<number>(0.9);
 
@@ -643,12 +682,41 @@ export default function DoorCompositePage() {
                     }}
                 >
                     <div style={{ fontWeight: 700, marginBottom: 8 }}>1) 현장 사진</div>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setBgFile(e.target.files?.[0] ?? null)}
-                        style={{ width: "100%" }}
-                    />
+                    <label
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                            padding: 24,
+                            border: "2px dashed #cbd5e1",
+                            borderRadius: 12,
+                            cursor: "pointer",
+                            background: "#f8fafc",
+                            transition: "all 0.2s"
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.borderColor = "#6366f1")}
+                        onMouseOut={(e) => (e.currentTarget.style.borderColor = "#cbd5e1")}
+                    >
+                        <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ padding: 10, background: "white", borderRadius: "50%", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}>
+                                <Camera size={24} color="#475569" />
+                            </div>
+                            <div style={{ padding: 10, background: "white", borderRadius: "50%", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}>
+                                <Upload size={24} color="#475569" />
+                            </div>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#64748b" }}>
+                            {bgFile ? "사진 변경하기" : "카메라 / 사진 업로드"}
+                        </span>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setBgFile(e.target.files?.[0] ?? null)}
+                            style={{ display: "none" }}
+                        />
+                    </label>
 
                     <hr style={{ margin: "12px 0", opacity: 0.2 }} />
 

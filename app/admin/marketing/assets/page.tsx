@@ -10,11 +10,17 @@ import {
 type Asset = {
     id: string;
     name: string;
-    category: "logo" | "product" | "banner" | "video" | "font" | "etc";
+    category: "logo" | "product" | "banner" | "video" | "font" | "ar_door" | "etc";
     file_url: string;
     tags: string;
     size_bytes: number;
     created_at: string;
+    metadata?: {
+        category?: string;
+        frame?: string;
+        glass?: string;
+        [key: string]: any;
+    };
 };
 
 export default function MarketingAssetsPage() {
@@ -25,6 +31,15 @@ export default function MarketingAssetsPage() {
 
     // File Input Ref
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // AR Door Metadata State
+    const [arMeta, setArMeta] = useState({
+        category: "3연동",
+        frame: "블랙",
+        glass: "투명강화"
+    });
+
+    const [showArForm, setShowArForm] = useState(false);
 
     useEffect(() => {
         fetchAssets();
@@ -54,35 +69,41 @@ export default function MarketingAssetsPage() {
         const filePath = `assets/${fileName}`;
 
         try {
-            // 1. Upload to Storage (Bucket: 'public' or 'marketing')
-            // Using 'public' bucket for simplicity in this template, user ensures bucket exists.
+            // 1. Upload
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from("public")
                 .upload(filePath, file);
 
             if (uploadError) throw uploadError;
 
-            // 2. Get Public URL
+            // 2. Public URL
             const { data: { publicUrl } } = supabase.storage
                 .from("public")
                 .getPublicUrl(filePath);
 
-            // 3. Insert into DB
+            // 3. Insert
+            // Check if it's AR upload mode
+            const isAr = showArForm;
+            const category = isAr ? 'ar_door' : determineCategory(file.type);
+            const metadata = isAr ? arMeta : {};
+
             const { error: dbError } = await supabase
                 .from("marketing_assets")
                 .insert({
                     name: file.name,
-                    category: determineCategory(file.type),
+                    category,
                     file_url: publicUrl,
                     size_bytes: file.size,
                     mime_type: file.type,
-                    tags: "upload"
+                    tags: isAr ? "ar_door" : "upload",
+                    metadata // Save specific AR text
                 });
 
             if (dbError) throw dbError;
 
             alert("업로드 완료!");
             fetchAssets();
+            setShowArForm(false); // Reset
 
         } catch (error: any) {
             console.error("Upload Error:", error);
@@ -95,14 +116,12 @@ export default function MarketingAssetsPage() {
 
     const handleDelete = async (id: string, url: string) => {
         if (!confirm("정말 삭제하시겠습니까?")) return;
-
         await supabase.from("marketing_assets").delete().eq("id", id);
-        // Optional: Delete from storage too if needed logic
         fetchAssets();
     };
 
     const determineCategory = (mime: string) => {
-        if (mime.startsWith("image/")) return "product"; // Default to product image
+        if (mime.startsWith("image/")) return "product";
         if (mime.startsWith("video/")) return "video";
         return "etc";
     };
@@ -119,9 +138,9 @@ export default function MarketingAssetsPage() {
             </h1>
 
             {/* Toolbar */}
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex gap-2">
-                    {["all", "logo", "product", "banner", "font"].map(cat => (
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div className="flex gap-2 flex-wrap">
+                    {["all", "logo", "product", "ar_door", "banner", "font"].map(cat => (
                         <button
                             key={cat}
                             onClick={() => setFilterCategory(cat)}
@@ -131,12 +150,40 @@ export default function MarketingAssetsPage() {
                                     : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}
                             `}
                         >
-                            {cat === "all" ? "전체" : cat}
+                            {cat === "ar_door" ? "AR 도어" : (cat === "all" ? "전체" : cat)}
                         </button>
                     ))}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                    {/* AR Upload Toggle */}
+                    {filterCategory === 'ar_door' && (
+                        <div className="flex items-center gap-2 mr-4 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                            <span className="text-xs font-bold text-indigo-800">AR 설정:</span>
+                            <select className="text-xs p-1" value={arMeta.category} onChange={e => setArMeta({ ...arMeta, category: e.target.value })}>
+                                <option value="3연동">3연동</option>
+                                <option value="원슬라이딩">원슬라이딩</option>
+                                <option value="스윙">스윙</option>
+                                <option value="파티션">파티션</option>
+                            </select>
+                            <select className="text-xs p-1" value={arMeta.frame} onChange={e => setArMeta({ ...arMeta, frame: e.target.value })}>
+                                <option value="블랙">블랙</option>
+                                <option value="화이트">화이트</option>
+                                <option value="브론즈">브론즈</option>
+                                <option value="실버">실버</option>
+                            </select>
+                            <select className="text-xs p-1" value={arMeta.glass} onChange={e => setArMeta({ ...arMeta, glass: e.target.value })}>
+                                <option value="투명강화">투명</option>
+                                <option value="샤틴">샤틴</option>
+                                <option value="브론즈">브론즈</option>
+                                <option value="다크">다크</option>
+                            </select>
+                            <button onClick={() => setShowArForm(true)} className={`text-xs px-2 py-1 rounded bg-indigo-600 text-white`}>
+                                설정됨
+                            </button>
+                        </div>
+                    )}
+
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -145,7 +192,10 @@ export default function MarketingAssetsPage() {
                         accept="image/*,video/*"
                     />
                     <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => {
+                            if (filterCategory === 'ar_door') setShowArForm(true);
+                            fileInputRef.current?.click()
+                        }}
                         disabled={uploading}
                         className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg font-bold hover:bg-pink-700 transition-colors disabled:opacity-50"
                     >
@@ -154,7 +204,7 @@ export default function MarketingAssetsPage() {
                         ) : (
                             <>
                                 <Upload size={18} />
-                                업로드
+                                {filterCategory === 'ar_door' ? "AR 도어 업로드" : "업로드"}
                             </>
                         )}
                     </button>
@@ -203,8 +253,9 @@ export default function MarketingAssetsPage() {
                         {/* Info */}
                         <div className="p-3">
                             <div className="flex justify-between items-start mb-1">
-                                <div className="text-xs font-bold text-slate-500 uppercase tracking-tighter border border-slate-200 px-1.5 rounded bg-slate-50">
-                                    {asset.category}
+                                <div className={`text-xs font-bold uppercase tracking-tighter border px-1.5 rounded 
+                                    ${asset.category === 'ar_door' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                    {asset.category === 'ar_door' ? 'AR' : asset.category}
                                 </div>
                                 <button className="text-slate-400 hover:text-slate-600">
                                     <MoreVertical size={14} />
@@ -213,10 +264,16 @@ export default function MarketingAssetsPage() {
                             <h3 className="text-sm font-bold text-slate-900 truncate mb-1" title={asset.name}>
                                 {asset.name}
                             </h3>
-                            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                                <Tag size={10} />
-                                <span>{asset.tags || "Untagged"}</span>
-                            </div>
+                            {asset.category === 'ar_door' && asset.metadata ? (
+                                <div className="text-[10px] text-indigo-600 font-medium">
+                                    {asset.metadata.category} / {asset.metadata.frame}
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                                    <Tag size={10} />
+                                    <span>{asset.tags || "Untagged"}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}

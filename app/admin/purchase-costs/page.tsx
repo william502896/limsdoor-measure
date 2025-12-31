@@ -181,7 +181,7 @@ export default function MisoCostPage() {
 
         let backendType: MisoProductType = "1S_MANUAL";
         let fixVariant: FixVariant | undefined;
-        let semiSwingVariant: SemiSwingVariant = "ASYM_1H"; // Default
+        const semiSwingVariant: SemiSwingVariant = "ASYM_1H"; // Default
 
         // Mapping Logic
         if (type.startsWith("FIX")) {
