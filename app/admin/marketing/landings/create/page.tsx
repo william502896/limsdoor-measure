@@ -303,7 +303,7 @@ export default function CreateLandingPage() {
                                 ) : assets.length === 0 ? (
                                     <div className="py-10 text-center text-slate-400 text-sm">
                                         등록된 자산이 없습니다.<br />
-                                        '마케팅 > 브랜드 자산' 메뉴에서 이미지를 등록해주세요.
+                                        '마케팅 &gt; 브랜드 자산' 메뉴에서 이미지를 등록해주세요.
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-3 md:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar">
