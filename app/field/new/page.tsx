@@ -1047,6 +1047,18 @@ function FieldCorrectionContent() {
                     <p className="text-slate-300 mb-10 font-medium">정확한 측정이 완벽한 시공을 만듭니다.</p>
 
                     <div className="w-full space-y-3 mb-8">
+                        {/* AR Button (New) */}
+                        <button
+                            onClick={() => router.push("/shop/ar")}
+                            className="w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-btn-custom font-bold text-lg shadow-xl hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-2 mb-2"
+                            style={{
+                                borderRadius: 'var(--ui-btn-radius)',
+                            }}
+                        >
+                            <Smartphone size={22} className="text-white" />
+                            <span>AR로 우리집 꾸미기</span>
+                        </button>
+
                         {/* Button uses White BG + Primary Text (Original Look) */}
                         <button
                             onClick={() => setStep("FORM")}
