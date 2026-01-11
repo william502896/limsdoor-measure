@@ -405,6 +405,46 @@ ${BANK_LINE}`;
 
     const frameGroups = useMemo(() => getFrameOptions(door), [door]);
 
+    // ✅ DB Save (Service Role)
+    async function handleSaveOnly() {
+        try {
+            const payload = {
+                customer: { name: customerName, phone: customerPhone },
+                measurement: { widthMm, heightMm, widthPoints, heightPoints },
+                options: {
+                    doorType: door,
+                    openDirection,
+                    frameFinish,
+                    frameColor,
+                    glassDesign,
+                },
+                pricing, // calcPricing result
+                extras: {
+                    demolitionOldDoor: extraDemolition,
+                    carpentryWork: extraCarpentry,
+                    movingNoElevator: extraMoving,
+                    movingFloor,
+                },
+                status: "SAVED",
+            };
+
+            const res = await fetch("/api/measurements/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.error ?? "저장 실패");
+
+            alert("✅ 저장 완료되었습니다.");
+            // Reset or Reload
+            window.location.href = "/field/new";
+        } catch (err: any) {
+            alert(`❌ 저장 실패: ${err.message}`);
+        }
+    }
+
     return (
         <div className="min-h-screen bg-[#0b0f14] text-white">
             {/* Header */}
@@ -420,7 +460,7 @@ ${BANK_LINE}`;
                 </div>
             </div>
 
-            <div className="max-w-3xl mx-auto px-4 pt-4 pb-28 space-y-4">
+            <main className="max-w-3xl mx-auto px-4 py-6 pb-32">
                 {/* STEP 1: Door */}
                 {step === 1 && (
                     <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -744,8 +784,8 @@ ${BANK_LINE}`;
                 {/* STEP 4: Send */}
                 {step === 4 && (
                     <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <div className="text-lg font-semibold">4) 고객 전송</div>
-                        <div className="text-sm text-white/60 mb-4">메시지는 자동 생성됩니다. 복사 후 전송하세요.</div>
+                        <div className="text-lg font-semibold">4) 고객 전송 & 저장</div>
+                        <div className="text-sm text-white/60 mb-4">메시지를 복사하여 전송하거나, 시스템에 저장하세요.</div>
 
                         <div className="grid grid-cols-1 gap-3">
                             <div className="rounded-xl border border-white/10 p-3">
@@ -801,17 +841,28 @@ ${BANK_LINE}`;
                             </div>
                         </div>
 
-                        <div className="mt-4 flex gap-2">
-                            <button className="px-4 py-3 rounded-xl border border-white/15 w-full" onClick={() => setStep(3)}>
-                                ← 이전
+                        <div className="mt-4 flex flex-col gap-3">
+                            {/* Save Button */}
+                            <button
+                                onClick={handleSaveOnly}
+                                disabled={strongWarn || !pricing.ok}
+                                className={`w-full rounded-xl py-3 font-semibold text-white ${(strongWarn || !pricing.ok) ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500"}`}
+                            >
+                                저장하기 (DB)
                             </button>
-                            <button className="px-4 py-3 rounded-xl bg-white text-black font-semibold w-full" onClick={() => alert("전송 연동(카톡/문자)은 기존 로직에 연결하세요.")}>
-                                고객에게 보내기(연동)
-                            </button>
+
+                            <div className="flex gap-2">
+                                <button className="px-4 py-3 rounded-xl border border-white/15 w-full" onClick={() => setStep(3)}>
+                                    ← 이전
+                                </button>
+                                <button className="px-4 py-3 rounded-xl bg-white text-black font-semibold w-full" onClick={() => alert("전송 연동(카톡/문자)은 기존 로직에 연결하세요.")}>
+                                    고객에게 보내기(연동)
+                                </button>
+                            </div>
                         </div>
                     </section>
                 )}
-            </div>
+            </main>
 
             {/* Sticky Footer: price always visible */}
             <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#0b0f14]/92 backdrop-blur safe-bottom">
