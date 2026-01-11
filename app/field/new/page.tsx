@@ -216,6 +216,24 @@ export default function FieldNewPage() {
     const [measurerDiscountWon, setMeasurerDiscountWon] = useState<number>(0);
     const [promoDiscountWon, setPromoDiscountWon] = useState<number>(0);
 
+    // ✅ Extra Work (Demolition, Carpentry, Moving)
+    const [extraDemolition, setExtraDemolition] = useState(false);
+    const [extraCarpentry, setExtraCarpentry] = useState(false);
+    const [extraMoving, setExtraMoving] = useState(false);
+    const [movingFloor, setMovingFloor] = useState<number>(0);
+
+    // ✅ Site Type (New vs Existing)
+    const [isNewApartment, setIsNewApartment] = useState<boolean>(false);
+
+    // Auto-toggle demolition based on site type
+    useEffect(() => {
+        if (!isNewApartment) {
+            setExtraDemolition(true);
+        } else {
+            setExtraDemolition(false);
+        }
+    }, [isNewApartment]);
+
     // UI State
     const [optionsOpen, setOptionsOpen] = useState(true);
 
@@ -297,6 +315,57 @@ export default function FieldNewPage() {
         }
     }, [pricing?.ok, pricing?.reason]);
 
+    // ✅ Advanced Validation Guard
+    const whGuard = useMemo(() => guardWidthHeight(door, widthMm, heightMm), [door, widthMm, heightMm]);
+
+    // ✅ “강한 경고” 기준(여기 걸리면 전송/저장 잠금)
+    const strongWarn =
+        // swap이 더 좋아 보이는데 아직 스왑 안 한 경우
+        (whGuard.swapImproves && (whGuard.suggestSwap || heightMm < 1800)) ||
+        // 제품별 정상범위에서 둘 중 하나라도 크게 벗어남(경고 문구 1개 이상이면 잠금)
+        whGuard.warnings.length > 0;
+
+    const [whSpokenKey, setWhSpokenKey] = useState<string>("");
+
+    // ✅ 경고가 새로 생기면 음성 안내(너무 반복되는 것 방지)
+    useEffect(() => {
+        if (whGuard.warnings.length === 0) return;
+
+        const key = `${door}-${widthMm}-${heightMm}-${whGuard.swapImproves ? "swapYes" : "swapNo"}-${whGuard.warnings.join("|")}`;
+        if (key === whSpokenKey) return;
+
+        // 핵심만 말하기
+        const rule = getDoorRangeRule(door);
+        const msg = `입력 확인 필요. ${rule.label} 기준으로 가로 ${widthMm}, 세로 ${heightMm} 입니다. ${whGuard.swapImproves ? "가로와 세로가 뒤바뀐 것으로 보입니다." : "치수를 다시 확인해 주세요."}`;
+        speakKo(msg);
+        setWhSpokenKey(key);
+    }, [whGuard.warnings, whGuard.swapImproves, door, widthMm, heightMm, whSpokenKey]);
+
+    // 🔊 TTS for Extras
+    useEffect(() => {
+        const msgs: string[] = [];
+        if (extraDemolition) msgs.push("기존 중문 철거가 추가되었습니다.");
+        if (extraCarpentry) msgs.push("목공 작업이 추가되었습니다. 자재비는 별도입니다.");
+        if (extraMoving) msgs.push("짐이전 옵션이 추가되었습니다.");
+        if (msgs.length) speakKo(msgs.join(" "));
+    }, [extraDemolition, extraCarpentry, extraMoving]);
+
+    // Helper: Build Extra Work Lines
+    function buildExtraWorkLines() {
+        const lines: string[] = [];
+        // Explicit site type line
+        const siteTypeLine = isNewApartment ? "- 현장 유형: 신규 아파트 (철거 없음 / 기본 OFF)" : "- 현장 유형: 기존 주택/구축 (철거 기본포함 / ON)";
+
+        if (extraDemolition) lines.push("- 기존 중문 철거: +150,000원");
+        if (extraCarpentry) lines.push("- 목공 작업: 시공비 +50,000원 (자재비 별도)");
+        if (extraMoving) {
+            const f = Math.max(0, Math.floor(Number(movingFloor || 0)));
+            if (f >= 2) lines.push(`- 짐이전(엘베 없음): ${f}층 → +${(f - 1) * 10000}원`);
+            else lines.push("- 짐이전(엘베 없음): 층수 미입력(2층부터 비용)");
+        }
+        return `\n[추가 작업 / 현장]\n${siteTypeLine}\n${lines.join("\n")}\n`;
+    }
+
     // Message Generation
     const customerMessage = useMemo(() => {
         if (!pricing.ok) {
@@ -326,7 +395,7 @@ ${hasDiffWarn ? `\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDif
 
 입금 계좌:
 ${BANK_LINE}`;
-    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage, extraDemolition, extraCarpentry, extraMoving, movingFloor]);
+    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage, extraDemolition, extraCarpentry, extraMoving, movingFloor, isNewApartment]);
 
     function setPoint(arr: number[], idx: number, value: number) {
         const next = [...arr];
@@ -510,6 +579,23 @@ ${BANK_LINE}`;
 
                         {optionsOpen && (
                             <div className="mt-4 space-y-4">
+                                {/* ✅ 0. Site Type (New vs Existing) */}
+                                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                                    <div className="text-sm font-semibold text-zinc-200">현장 유형</div>
+
+                                    <label className="flex items-center gap-2 text-sm text-zinc-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={isNewApartment}
+                                            onChange={(e) => setIsNewApartment(e.target.checked)}
+                                        />
+                                        신규 아파트
+                                    </label>
+                                    <div className="text-xs text-zinc-500">
+                                        신규 아파트를 선택하면 기존 중문 철거 작업이 필요하지 않습니다. (기본 철거 OFF)
+                                    </div>
+                                </div>
+
                                 {/* 1. Open Direction */}
                                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
                                     <div className="text-sm font-semibold text-zinc-200">도어 열림 방향 (거실에서 현관을 바라보는 기준)</div>
