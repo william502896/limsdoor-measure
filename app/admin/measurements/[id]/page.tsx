@@ -1,328 +1,134 @@
-"use client";
+import { supabaseAdmin } from "@/app/lib/supabaseAdmin";
 
-import { useEffect, useMemo, useState } from "react";
+export const dynamic = "force-dynamic";
 
-type Measurement = any;
-type Photo = any;
+function won(n?: number) {
+    const v = Number(n ?? 0);
+    return v.toLocaleString() + "원";
+}
 
-export default function AdminMeasurementDetail({ params }: { params: { id: string } }) {
-    const id = params.id;
+export default async function MeasurementDetailPage({ params }: { params: { id: string } }) {
+    const sb = supabaseAdmin();
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [err, setErr] = useState<string>("");
+    const { data: m, error } = await sb
+        .from("measurements")
+        .select("*")
+        .eq("id", params.id)
+        .single();
 
-    const [m, setM] = useState<Measurement | null>(null);
-    const [photos, setPhotos] = useState<Photo[]>([]);
-
-    const [adminStatus, setAdminStatus] = useState<"PENDING" | "APPROVED" | "REJECTED">("PENDING");
-    const [adminNote, setAdminNote] = useState<string>("");
-
-    const title = useMemo(() => {
-        if (!m) return `실측 상세`;
-        return `${m.customer_name ?? ""} / ${m.width_mm ?? 0}×${m.height_mm ?? 0}mm`;
-    }, [m]);
-
-    async function load() {
-        setLoading(true);
-        setErr("");
-        try {
-            const res = await fetch("/api/admin/measurements/get", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id }),
-            });
-
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-
-            setM(data.measurement);
-            setPhotos(data.photos ?? []);
-            setAdminStatus((data.measurement?.admin_status ?? "PENDING") as any);
-            setAdminNote(data.measurement?.admin_note ?? "");
-        } catch (e: any) {
-            setErr(e?.message ?? "로드 실패");
-        } finally {
-            setLoading(false);
-        }
+    if (error || !m) {
+        return <div className="p-6 text-red-500">불러오기 실패: {error?.message}</div>;
     }
 
-    async function save() {
-        if (!m) return;
-        setSaving(true);
-        setErr("");
-        try {
-            const res = await fetch("/api/admin/measurements/update", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    id: m.id,
-                    admin_status: adminStatus,
-                    admin_note: adminNote,
-                }),
-            });
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            // 화면 반영
-            setM((prev: Measurement | null) => (prev ? { ...prev, ...data.updated } : prev));
+    const o = m.options_json ?? {};
+    const p = m.pricing_json ?? {};
+    const x = m.extras_json ?? {};
 
-            if (data.transitioned) {
-                alert(`저장 완료 + 자동 발송 실행\n${JSON.stringify(data.sendLogs, null, 2)}`);
-            } else {
-                alert("저장 완료");
-            }
-        } catch (e: any) {
-            setErr(e?.message ?? "저장 실패");
-        } finally {
-            setSaving(false);
-        }
-    }
+    // ✅ 표기용(없으면 JSON에서 꺼냄)
+    const customerName = m.customer_name ?? o?.customer?.name ?? "";
+    const customerPhone = m.customer_phone ?? o?.customer?.phone ?? "";
+    const customerAddress = m.customer_address ?? o?.customer?.address ?? "";
 
-    useEffect(() => {
-        load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
+    const doorType = m.door_type ?? o?.doorType ?? "";
+    const doorDetail = m.door_detail ?? o?.doorDetail ?? "";
+    const design = o?.design ?? o?.doorDesign ?? "";
+    const openDirection = o?.openDirection ?? "";
+    const width = m.width_mm ?? o?.widthMm ?? 0;
+    const height = m.height_mm ?? o?.heightMm ?? 0;
 
-    if (loading) {
-        return (
-            <div style={wrap}>
-                <h2 style={h2}>실측 불러오는 중…</h2>
-            </div>
-        );
-    }
+    const finish = o?.frameFinish ?? "";   // 불소도장/아노다이징
+    const color = o?.frameColor ?? "";     // 화이트/블랙/샴페인골드 등
 
-    if (err) {
-        return (
-            <div style={wrap}>
-                <h2 style={h2}>오류</h2>
-                <div style={errBox}>{err}</div>
-                <button style={btn} onClick={load}>다시 불러오기</button>
-            </div>
-        );
-    }
+    const glassType = o?.glassType ?? "";
+    const glassDesign = o?.glassDesign ?? "";
+    const muntinQty = Number(o?.muntinQty ?? 0); // ✅ 간살 수량(요구하신 것)
 
-    if (!m) {
-        return (
-            <div style={wrap}>
-                <h2 style={h2}>데이터 없음</h2>
-            </div>
-        );
-    }
-
-    const primary = m.primary_image_url || m.image_data_url || null;
+    const measureDate = m.created_at ? new Date(m.created_at).toLocaleString("ko-KR") : "-";
+    const installDate = o?.installDate ?? o?.requestDate ?? "-";
+    const installTime = o?.installTime ?? o?.requestTime ?? "-";
 
     return (
-        <div style={wrap}>
-            <div style={topRow}>
+        <div className="p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
                 <div>
-                    <div style={badge}>MEASUREMENT</div>
-                    <h1 style={h1}>{title}</h1>
-                    <div style={sub}>
-                        ID: <span style={{ opacity: 0.9 }}>{m.id}</span>
-                    </div>
+                    <h1 className="text-xl font-bold">사무실 확인용 상세 (실측)</h1>
+                    <div className="text-sm text-neutral-400">ID: {m.id}</div>
                 </div>
 
-                <div style={actions}>
-                    <button style={btn} onClick={load} disabled={saving}>새로고침</button>
-                    <button style={btnPrimary} onClick={save} disabled={saving}>
-                        {saving ? "저장 중…" : "저장"}
-                    </button>
-                </div>
+                <a
+                    className="rounded-lg border border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-900"
+                    href="/admin/measurements"
+                >
+                    목록으로
+                </a>
             </div>
 
-            <div style={grid}>
-                {/* 대표 이미지 */}
-                <div style={card}>
-                    <h3 style={h3}>대표 캡처</h3>
-                    {primary ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={primary} alt="primary" style={img} />
-                    ) : (
-                        <div style={empty}>대표 이미지가 없습니다.</div>
-                    )}
-                </div>
+            {/* 고객 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">고객 정보</div>
+                <div className="text-sm">이름: {customerName}</div>
+                <div className="text-sm">전화: {customerPhone}</div>
+                <div className="text-sm">주소: {customerAddress || "-"}</div>
+            </section>
 
-                {/* 관리자 상태 */}
-                <div style={card}>
-                    <h3 style={h3}>관리자 처리</h3>
+            {/* 일정 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">일정</div>
+                <div className="text-sm">실측일: {measureDate}</div>
+                <div className="text-sm">시공요청: {installDate} {installTime}</div>
+            </section>
 
-                    <div style={row}>
-                        <label style={label}>상태</label>
-                        <select
-                            value={adminStatus}
-                            onChange={(e) => setAdminStatus(e.target.value as any)}
-                            style={select}
-                        >
-                            <option value="PENDING">보류(PENDING)</option>
-                            <option value="APPROVED">확정(APPROVED)</option>
-                            <option value="REJECTED">반려(REJECTED)</option>
-                        </select>
-                    </div>
+            {/* 제품/옵션 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">제품/옵션</div>
+                <div className="text-sm">문종: {doorType} {doorDetail ? ` / ${doorDetail}` : ""}</div>
+                <div className="text-sm">디자인: {design || "-"}</div>
+                <div className="text-sm">문열림 방향: {openDirection || "-"}</div>
+                <div className="text-sm">사이즈(mm): {width} × {height}</div>
+                <div className="text-sm">프레임: {finish} / {color}</div>
+                <div className="text-sm">유리 종류: {glassType || "-"}</div>
+                <div className="text-sm">유리 디자인: {glassDesign || "-"}</div>
+                <div className="text-sm">간살 수량: {muntinQty} (개)</div>
+            </section>
 
-                    <div style={{ marginTop: 10 }}>
-                        <label style={label}>메모</label>
-                        <textarea
-                            value={adminNote}
-                            onChange={(e) => setAdminNote(e.target.value)}
-                            style={textarea}
-                            placeholder="예: 실측값 확인 완료 / 보강 필요 / 고객 재확인 요청 등"
-                        />
-                    </div>
+            {/* 추가작업 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">추가 작업</div>
+                <div className="text-sm">철거: {x?.demolitionOldDoor ? "예 (150,000원)" : "아니오"}</div>
+                <div className="text-sm">목공: {x?.carpentryWork ? "예 (시공비 +50,000원 / 자재비 별도)" : "아니오"}</div>
+                <div className="text-sm">짐이전: {x?.movingNoElevator ? `예 (층수 ${x?.movingFloor ?? "-"} / 층당 10,000원)` : "아니오"}</div>
+            </section>
 
-                    <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-                        저장을 눌러야 DB에 반영됩니다.
-                    </div>
-                </div>
+            {/* 금액 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">금액</div>
+                <div className="text-sm">자재비(확정): {won(p?.materialWon ?? p?.material)}</div>
+                <div className="text-sm">시공비(별도): {won(p?.installWon ?? p?.install)}</div>
+                <div className="text-sm font-bold">총액: {won(p?.totalWon ?? p?.total)}</div>
+            </section>
 
-                {/* 고객/옵션 */}
-                <div style={card}>
-                    <h3 style={h3}>고객 정보</h3>
-                    <Info k="이름" v={m.customer_name} />
-                    <Info k="전화" v={m.customer_phone} />
-                    <Info k="주소" v={m.customer_address} />
+            {/* 메모 */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
+                <div className="font-semibold">메모</div>
+                <pre className="whitespace-pre-wrap text-sm text-neutral-200">{m.memo ?? "-"}</pre>
+            </section>
 
-                    <hr style={hr} />
-
-                    <h3 style={h3}>옵션</h3>
-                    <Info k="카테고리" v={m.category} />
-                    <Info k="상세" v={m.detail} />
-                    <Info k="유리" v={m.glass} />
-                    <Info k="디자인" v={m.design} />
-                    <Info k="열림방향" v={m.open_direction} />
-                </div>
-
-                {/* 실측값 */}
-                <div style={card}>
-                    <h3 style={h3}>실측 값</h3>
-                    <Info k="가로(mm)" v={m.width_mm} />
-                    <Info k="세로(mm)" v={m.height_mm} />
-                    <Info k="mm/px" v={m.mm_per_px} />
-                    <Info k="source" v={m.source} />
-
-                    <details style={{ marginTop: 10 }}>
-                        <summary style={{ cursor: "pointer", opacity: 0.9 }}>코너 좌표(corners) 보기</summary>
-                        <pre style={pre}>{JSON.stringify(m.corners ?? null, null, 2)}</pre>
-                    </details>
-                </div>
-
-                {/* 사진 리스트 */}
-                <div style={{ ...card, gridColumn: "1 / -1" }}>
-                    <h3 style={h3}>업로드 사진({photos.length})</h3>
-                    {photos.length === 0 ? (
-                        <div style={empty}>사진이 없습니다.</div>
-                    ) : (
-                        <div style={photoGrid}>
-                            {photos.map((p) => (
-                                <a key={p.id} href={p.public_url} target="_blank" rel="noreferrer" style={photoItem}>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={p.public_url} alt={p.file_name} style={thumb} />
-                                    <div style={photoMeta}>
-                                        <div style={{ fontWeight: 900, fontSize: 12 }}>{p.file_name}</div>
-                                        <div style={{ fontSize: 11, opacity: 0.75 }}>{p.mime_type || ""}</div>
-                                    </div>
-                                </a>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
+            {/* 원본 JSON(사무실은 이게 진짜 중요) */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-950 p-4 space-y-2">
+                <div className="font-semibold">원본 데이터(JSON)</div>
+                <details>
+                    <summary className="cursor-pointer text-sm text-neutral-300">options_json 보기</summary>
+                    <pre className="mt-2 text-xs overflow-auto">{JSON.stringify(o, null, 2)}</pre>
+                </details>
+                <details>
+                    <summary className="cursor-pointer text-sm text-neutral-300">pricing_json 보기</summary>
+                    <pre className="mt-2 text-xs overflow-auto">{JSON.stringify(p, null, 2)}</pre>
+                </details>
+                <details>
+                    <summary className="cursor-pointer text-sm text-neutral-300">extras_json 보기</summary>
+                    <pre className="mt-2 text-xs overflow-auto">{JSON.stringify(x, null, 2)}</pre>
+                </details>
+            </section>
         </div>
     );
 }
-
-function Info({ k, v }: { k: string; v: any }) {
-    return (
-        <div style={infoRow}>
-            <div style={infoKey}>{k}</div>
-            <div style={infoVal}>{v ?? "-"}</div>
-        </div>
-    );
-}
-
-/** ===== styles ===== */
-const wrap: React.CSSProperties = { padding: 16, maxWidth: 1200, margin: "0 auto" };
-const topRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" };
-const actions: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center" };
-const badge: React.CSSProperties = { display: "inline-block", padding: "6px 10px", borderRadius: 999, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", fontSize: 12, fontWeight: 900 };
-const h1: React.CSSProperties = { margin: "10px 0 6px", fontSize: 24, fontWeight: 900 };
-const h2: React.CSSProperties = { margin: "10px 0", fontSize: 18, fontWeight: 900 };
-const h3: React.CSSProperties = { margin: "0 0 10px", fontSize: 16, fontWeight: 900 };
-const sub: React.CSSProperties = { fontSize: 12, opacity: 0.75 };
-
-const grid: React.CSSProperties = {
-    marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-    gap: 12,
-};
-
-const card: React.CSSProperties = {
-    padding: 12,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.18)",
-};
-
-const img: React.CSSProperties = { width: "100%", borderRadius: 14, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.25)" };
-const empty: React.CSSProperties = { padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", opacity: 0.85 };
-
-const row: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center" };
-const label: React.CSSProperties = { width: 70, fontSize: 12, opacity: 0.8, fontWeight: 900 };
-
-const select: React.CSSProperties = {
-    flex: 1,
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
-    outline: "none",
-    fontWeight: 900,
-};
-
-const textarea: React.CSSProperties = {
-    width: "100%",
-    minHeight: 110,
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
-    outline: "none",
-    fontSize: 13,
-    lineHeight: 1.45,
-};
-
-const btn: React.CSSProperties = {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "white",
-    fontWeight: 900,
-    cursor: "pointer",
-};
-
-const btnPrimary: React.CSSProperties = {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(0,160,255,0.55)",
-    background: "rgba(0,160,255,0.18)",
-    color: "white",
-    fontWeight: 900,
-    cursor: "pointer",
-};
-
-const infoRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "90px 1fr", gap: 10, padding: "6px 0" };
-const infoKey: React.CSSProperties = { fontSize: 12, opacity: 0.8, fontWeight: 900 };
-const infoVal: React.CSSProperties = { fontSize: 13, opacity: 0.95, wordBreak: "break-word" };
-
-const hr: React.CSSProperties = { border: "none", borderTop: "1px solid rgba(255,255,255,0.12)", margin: "10px 0" };
-const pre: React.CSSProperties = { marginTop: 10, padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.25)", overflow: "auto", fontSize: 12 };
-
-const photoGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 };
-const photoItem: React.CSSProperties = { display: "block", textDecoration: "none", color: "inherit", borderRadius: 14, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", overflow: "hidden" };
-const thumb: React.CSSProperties = { width: "100%", height: 140, objectFit: "cover", display: "block" };
-const photoMeta: React.CSSProperties = { padding: 8 };
-
-const errBox: React.CSSProperties = { padding: 12, borderRadius: 12, background: "rgba(255,60,60,0.12)", border: "1px solid rgba(255,60,60,0.25)", marginBottom: 10 };

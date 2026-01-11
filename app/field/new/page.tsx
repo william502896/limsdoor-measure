@@ -194,6 +194,13 @@ export default function FieldNewPage() {
     // 고객 정보
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
+    const [customerAddress, setCustomerAddress] = useState(""); // ✅ Added Address
+
+    // Schedule & Memo
+    const [installDate, setInstallDate] = useState("");
+    const [installTime, setInstallTime] = useState("");
+    const [memo, setMemo] = useState("");
+    const [photos, setPhotos] = useState<string[]>([]); // ✅ Added Photos
 
     // 실측 (Wizard uses points, but Pricing uses single width/height)
     const [widthPoints, setWidthPoints] = useState<number[]>([0, 0, 0]);
@@ -409,7 +416,11 @@ ${BANK_LINE}`;
     async function handleSaveOnly() {
         try {
             const payload = {
-                customer: { name: customerName, phone: customerPhone },
+                customer: {
+                    name: customerName,
+                    phone: customerPhone,
+                    address: customerAddress
+                },
                 measurement: { widthMm, heightMm, widthPoints, heightPoints },
                 options: {
                     doorType: door,
@@ -417,6 +428,10 @@ ${BANK_LINE}`;
                     frameFinish,
                     frameColor,
                     glassDesign,
+                    // ✅ Additional info
+                    installDate,
+                    installTime,
+                    muntinQty: glassDesign.muntinExtraBarCount // If this is what user meant by muntinQty
                 },
                 pricing, // calcPricing result
                 extras: {
@@ -425,6 +440,8 @@ ${BANK_LINE}`;
                     movingNoElevator: extraMoving,
                     movingFloor,
                 },
+                memo,
+                photos,
                 status: "SAVED",
             };
 
@@ -803,7 +820,44 @@ ${BANK_LINE}`;
                                         placeholder="전화번호"
                                         onChange={(e) => setCustomerPhone(e.target.value)}
                                     />
+                                    <input
+                                        className="col-span-1 md:col-span-2 rounded-xl bg-black/40 border border-white/10 px-3 py-3"
+                                        value={customerAddress}
+                                        placeholder="주소 (동/호수 포함)"
+                                        onChange={(e) => setCustomerAddress(e.target.value)}
+                                    />
                                 </div>
+                            </div>
+
+                            {/* ✅ Schedule & Memo */}
+                            <div className="rounded-xl border border-white/10 p-3">
+                                <div className="font-semibold mb-2">일정 및 메모</div>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-zinc-400">시공요청일</label>
+                                        <input
+                                            type="date"
+                                            className="rounded-xl bg-black/40 border border-white/10 px-3 py-3 w-full text-white placeholder-zinc-500"
+                                            value={installDate}
+                                            onChange={(e) => setInstallDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-zinc-400">시간</label>
+                                        <input
+                                            type="time"
+                                            className="rounded-xl bg-black/40 border border-white/10 px-3 py-3 w-full text-white placeholder-zinc-500"
+                                            value={installTime}
+                                            onChange={(e) => setInstallTime(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <textarea
+                                    className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-3 text-sm h-24"
+                                    placeholder="특이사항 / 메모 / 도어락 비밀번호 등"
+                                    value={memo}
+                                    onChange={(e) => setMemo(e.target.value)}
+                                />
                             </div>
 
                             <div className="rounded-xl border border-white/10 p-3 bg-black/20">
