@@ -326,7 +326,7 @@ ${hasDiffWarn ? `\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDif
 
 입금 계좌:
 ${BANK_LINE}`;
-    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage]);
+    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage, extraDemolition, extraCarpentry, extraMoving, movingFloor]);
 
     function setPoint(arr: number[], idx: number, value: number) {
         const next = [...arr];
@@ -578,7 +578,53 @@ ${BANK_LINE}`;
                                     isSliding={door === "1W_SLIDING"}
                                 />
 
-                                {/* 4. Discount button */}
+                                {/* 4. Extra Work Options */}
+                                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                                    <div className="text-sm font-semibold text-zinc-200">추가 작업</div>
+
+                                    <label className="flex items-center gap-2 text-sm text-zinc-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={extraDemolition}
+                                            onChange={(e) => setExtraDemolition(e.target.checked)}
+                                        />
+                                        기존 중문 철거 (+150,000원)
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-sm text-zinc-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={extraCarpentry}
+                                            onChange={(e) => setExtraCarpentry(e.target.checked)}
+                                        />
+                                        목공 작업 (시공비 +50,000원 / 자재비 별도)
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-sm text-zinc-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={extraMoving}
+                                            onChange={(e) => setExtraMoving(e.target.checked)}
+                                        />
+                                        짐이전 (엘리베이터 없는 주택)
+                                    </label>
+
+                                    {extraMoving ? (
+                                        <div className="pl-6">
+                                            <div className="text-xs text-zinc-400 mb-1">2층부터 각층당 10,000원 (예: 5층 → 40,000원)</div>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={movingFloor}
+                                                onChange={(e) => setMovingFloor(Math.max(0, Math.floor(Number(e.target.value || 0))))}
+                                                className="w-40 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-zinc-100"
+                                                placeholder="층수 입력"
+                                            />
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                {/* 5. Discount button */}
                                 <div className="rounded-xl border border-white/10 p-3">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -647,8 +693,8 @@ ${BANK_LINE}`;
                                     <button
                                         disabled={strongWarn || !pricing.ok}
                                         className={`w-full rounded-xl py-3 font-semibold ${(strongWarn || !pricing.ok)
-                                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                                                : "bg-white text-black"
+                                            ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                            : "bg-white text-black"
                                             }`}
                                         onClick={async () => {
                                             // ✅ 마지막 확정 음성(실수 방지)
