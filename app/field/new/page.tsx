@@ -229,6 +229,9 @@ export default function FieldNewPage() {
     const [extraMoving, setExtraMoving] = useState(false);
     const [movingFloor, setMovingFloor] = useState<number>(0);
 
+    // ✅ Muntin Quantity (간살 수량 - 별도 옵션)
+    const [muntinQty, setMuntinQty] = useState<number>(0);
+
     // ✅ Site Type (New vs Existing)
     const [isNewApartment, setIsNewApartment] = useState<boolean>(false);
 
@@ -282,13 +285,14 @@ export default function FieldNewPage() {
             frameFinish,
             frameColor,
             glassDesign,
+            muntinQty, // ✅ Added
             installFeeWon: INSTALL_FEE,
             discount: {
                 measurerDiscountWon,
                 promoDiscountWon,
             },
         });
-    }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, measurerDiscountWon, promoDiscountWon]);
+    }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, muntinQty, measurerDiscountWon, promoDiscountWon]);
 
     // 🔊 TTS & Alert for Measurement Deviation
     const wDiff = useMemo(() => maxDiff(widthPoints), [widthPoints]);
@@ -415,33 +419,96 @@ ${BANK_LINE}`;
     // ✅ DB Save (Service Role)
     async function handleSaveOnly() {
         try {
+            const rule = getDoorRangeRule(door);
+
+            // 1) Options Payload
+            function buildOptionsPayload() {
+                const doorMeta = (() => {
+                    switch (door) {
+                        case "3T_MANUAL": return { type: "수동문", detail: "3연동" };
+                        case "AUTO": return { type: "자동문", detail: "3연동" };
+                        case "1W_SLIDING": return { type: "슬라이딩", detail: "원슬라이딩" };
+                        case "SWING_1": return { type: "스윙", detail: "1도어" };
+                        case "SWING_2": return { type: "스윙", detail: "2도어" };
+                        case "HOPE_1": return { type: "여닫이", detail: "호패 1도어" };
+                        case "HOPE_2": return { type: "여닫이", detail: "호패 2도어" };
+                        default: return { type: "기타", detail: String(door) };
+                    }
+                })();
+
+                return {
+                    // ✅ 제품
+                    doorType: doorMeta.type,
+                    doorDetail: doorMeta.detail,
+                    design: "기본", // 도어 디자인(모델명)이 따로 없으면 기본
+                    openDirection: openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌",
+
+                    // ✅ 프레임/색상
+                    frameFinish,
+                    frameColor,
+
+                    // ✅ 유리
+                    glassType: "기본(투명/브론즈 등)", // glassDesign에 구체적 타입 없음(GlassBase만 있음)
+                    glassDesign: glassDesign.archBasic ? "아치형" : "일반", // 단순화 예시
+                    glassDetail: glassDesign, // 전체 객체 저장
+                    muntinQty, // ✅ 간살 수량
+
+                    // ✅ 사이즈 관련 Rule
+                    sizeRule: {
+                        maxWidthMm: rule.maxW,
+                        maxHeightMm: rule.maxH,
+                        hardLimitWidthMm: null,
+                        hardLimitHeightMm: null
+                    },
+
+                    // ✅ 일정
+                    installDate: installDate || null,
+                    installTime: installTime || null,
+
+                    // ✅ 고객 확인
+                    customerConfirm: {
+                        confirmed: false,
+                        confirmedAt: null
+                    },
+
+                    // ✅ 사진
+                    photos: photos ?? [],
+                };
+            }
+
+            // 2) Measurement Payload
+            function buildMeasurementPayload() {
+                return {
+                    widthMm,
+                    heightMm,
+                    widthPoints: widthPoints ?? [],
+                    heightPoints: heightPoints ?? [],
+                    memo: memo ?? "",
+                };
+            }
+
+            // 3) Extras Payload
+            function buildExtrasPayload() {
+                return {
+                    demolitionOldDoor: Boolean(extraDemolition),
+                    carpentryWork: Boolean(extraCarpentry),
+                    movingNoElevator: Boolean(extraMoving),
+                    movingFloor: Number(movingFloor ?? 0),
+                };
+            }
+
+            // 4) Final Payload
             const payload = {
                 customer: {
                     name: customerName,
                     phone: customerPhone,
-                    address: customerAddress
+                    address: customerAddress,
                 },
-                measurement: { widthMm, heightMm, widthPoints, heightPoints },
-                options: {
-                    doorType: door,
-                    openDirection,
-                    frameFinish,
-                    frameColor,
-                    glassDesign,
-                    // ✅ Additional info
-                    installDate,
-                    installTime,
-                    muntinQty: glassDesign.muntinExtraBarCount // If this is what user meant by muntinQty
-                },
-                pricing, // calcPricing result
-                extras: {
-                    demolitionOldDoor: extraDemolition,
-                    carpentryWork: extraCarpentry,
-                    movingNoElevator: extraMoving,
-                    movingFloor,
-                },
-                memo,
-                photos,
+                measurement: buildMeasurementPayload(),
+                options: buildOptionsPayload(),
+                pricing,
+                extras: buildExtrasPayload(),
+                memo: memo ?? "",
                 status: "SAVED",
             };
 
@@ -454,9 +521,8 @@ ${BANK_LINE}`;
             const json = await res.json();
             if (!res.ok) throw new Error(json?.error ?? "저장 실패");
 
-            alert("✅ 저장 완료되었습니다.");
-            // Reset or Reload
-            window.location.href = "/field/new";
+            alert("✅ 저장 완료 (사무실에서 확인 가능)");
+            window.location.href = "/field/new"; // 다음 실측
         } catch (err: any) {
             alert(`❌ 저장 실패: ${err.message}`);
         }
@@ -720,6 +786,39 @@ ${BANK_LINE}`;
                                     onChange={setGlassDesign}
                                     isSliding={door === "1W_SLIDING"}
                                 />
+
+                                {/* ✅ 5. Muntin (간살) Option */}
+                                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 space-y-2">
+                                    <div className="font-semibold">간살(옵션)</div>
+                                    <div className="text-sm text-neutral-400">1개당 20,000원</div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMuntinQty((v: number) => Math.max(0, (v ?? 0) - 1))}
+                                            className="px-3 py-2 rounded-lg border border-neutral-700"
+                                        >
+                                            -
+                                        </button>
+                                        <input
+                                            value={muntinQty ?? 0}
+                                            onChange={(e) => setMuntinQty(Math.max(0, Number(e.target.value ?? 0)))}
+                                            className="w-20 text-center rounded-lg bg-neutral-950 border border-neutral-800 px-2 py-2"
+                                            inputMode="numeric"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setMuntinQty((v: number) => (v ?? 0) + 1)}
+                                            className="px-3 py-2 rounded-lg border border-neutral-700"
+                                        >
+                                            +
+                                        </button>
+
+                                        <div className="ml-auto text-sm font-bold">
+                                            {(Number(muntinQty ?? 0) * 20000).toLocaleString()}원
+                                        </div>
+                                    </div>
+                                </div>
 
                                 {/* 4. Extra Work Options */}
                                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">

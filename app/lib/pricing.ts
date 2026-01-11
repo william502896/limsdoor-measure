@@ -47,6 +47,9 @@ export type PricingInput = {
     glassBase?: GlassBase;
     glassDesign?: GlassDesign;
 
+    // ✅ 간살 (별도 수량)
+    muntinQty?: number;
+
     // 시공비(고객에게는 별도 표기)
     installFeeWon?: number; // 기본 150,000
 
@@ -66,6 +69,7 @@ export type PricingOutput = {
     sizeSurchargeWon: number;
     frameSurchargeWon: number;
     glassDesignWon: number;
+    muntinCost: number; // ✅ Start of Muntin Cost
     discountWon: number;
 
     // ✅ 고객표시용
@@ -198,6 +202,7 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
             glassDesignWon: 0,
+            muntinCost: 0, // ✅
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -217,6 +222,7 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
             glassDesignWon: 0,
+            muntinCost: 0, // ✅
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -230,11 +236,16 @@ export function calcPricing(input: PricingInput): PricingOutput {
     const frameSurchargeWon = calcFrameSurcharge(input.door, input.frameFinish, input.frameColor);
     const glassDesignWon = calcGlassDesignWon(input.door, input.glassDesign);
 
+    // ✅ 간살 비용 추가
+    const muntinCost = (input.muntinQty ?? 0) * 20000;
+
     const measurerDiscount = clampInt(input.discount?.measurerDiscountWon ?? 0);
     const promoDiscount = clampInt(input.discount?.promoDiscountWon ?? 0);
-    const discountWon = Math.min(baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + installWon, measurerDiscount + promoDiscount);
 
-    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + installWon;
+    // Total calculation including muntinCost
+    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + muntinCost + installWon;
+    const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount);
+
     const totalWon = Math.max(0, totalBeforeDiscount - discountWon);
 
     // ✅ 고객에게는 시공비 15만 제외한 금액을 "자재비(확정)"으로 표시
@@ -250,11 +261,12 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon,
             frameSurchargeWon,
             glassDesignWon,
+            muntinCost, // ✅ Added
             discountWon,
             materialWon: 0,
             installWon,
             totalWon: 0,
-            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, installWon, discountWon, totalWon: 0, materialWon: 0 },
+            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, muntinCost, installWon, discountWon, totalWon: 0, materialWon: 0 },
         };
     }
 
@@ -266,6 +278,7 @@ export function calcPricing(input: PricingInput): PricingOutput {
         sizeSurchargeWon,
         frameSurchargeWon,
         glassDesignWon,
+        muntinCost, // ✅ Added
         discountWon,
         materialWon,
         installWon,
@@ -275,6 +288,7 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon,
             frameSurchargeWon,
             glassDesignWon,
+            muntinCost, // ✅ Added
             installWon,
             discountWon,
             totalWon,
