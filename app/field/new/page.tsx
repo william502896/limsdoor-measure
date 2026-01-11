@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import GlassDesignOptions from "@/app/components/GlassDesignOptions";
 import { calcPricing, type DoorKind, type GlassDesign, type FrameFinish, type FrameColor } from "@/app/lib/pricing";
 
@@ -11,6 +11,7 @@ function cx(...a: (string | false | undefined)[]) {
 const SAMPLE_URL = "https://sites.google.com/view/limsdoor/%ED%99%88";
 const BANK_LINE = "케이뱅크 700100061232 주식회사 림스";
 const INSTALL_FEE = 150000;
+const EXTRA_MATERIAL_GUIDE = "실측 오차가 커서 마감재(추가자재) 사용이 필요할 수 있습니다. 현장 상태를 확인하고 추가 비용 가능성을 안내해 주세요.";
 
 // Default Glass Design
 const DEFAULT_GLASS_DESIGN: GlassDesign = {
@@ -21,6 +22,8 @@ const DEFAULT_GLASS_DESIGN: GlassDesign = {
     bottomPanel: false,
     bigArchVertical: false,
 };
+
+type OpenDirection = "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
 
 function formatWon(n: number) {
     return new Intl.NumberFormat("ko-KR").format(Math.max(0, Math.floor(n))) + "원";
@@ -75,6 +78,28 @@ function StepPill({ n, current, label }: { n: number; current: number; label: st
     );
 }
 
+// 🔊 TTS Helper
+function speakKo(text: string) {
+    try {
+        if (typeof window === "undefined") return;
+        window.speechSynthesis?.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "ko-KR";
+        u.rate = 1.0;
+        u.pitch = 1.0;
+        window.speechSynthesis?.speak(u);
+    } catch { }
+}
+
+// 📏 Deviation Helper
+function maxDiff(arr: number[]) {
+    const nums = arr.filter((n) => Number.isFinite(n) && n > 0);
+    if (nums.length < 2) return 0;
+    const mn = Math.min(...nums);
+    const mx = Math.max(...nums);
+    return mx - mn;
+}
+
 export default function FieldNewPage() {
     const [step, setStep] = useState(1);
 
@@ -91,6 +116,9 @@ export default function FieldNewPage() {
     const [frameFinish, setFrameFinish] = useState<FrameFinish>("FLUORO");
     const [frameColor, setFrameColor] = useState<FrameColor>("WHITE");
     const [glassDesign, setGlassDesign] = useState<GlassDesign>(DEFAULT_GLASS_DESIGN);
+
+    // ✅ Open Direction
+    const [openDirection, setOpenDirection] = useState<OpenDirection>("LEFT_TO_RIGHT");
 
     // Discount
     const [discountOpen, setDiscountOpen] = useState(false);
@@ -146,6 +174,27 @@ export default function FieldNewPage() {
         });
     }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, measurerDiscountWon, promoDiscountWon]);
 
+    // 🔊 TTS & Alert for Measurement Deviation
+    const wDiff = maxDiff((widthPoints ?? []).map((x: any) => Number(x)));
+    const hDiff = maxDiff((heightPoints ?? []).map((x: any) => Number(x)));
+    const hasDiffWarn = wDiff >= 10 || hDiff >= 10;
+
+    useEffect(() => {
+        if (hasDiffWarn) {
+            const msg = `주의. 실측값 오차가 발생했습니다. 가로 오차 ${wDiff} 밀리, 세로 오차 ${hDiff} 밀리. ${EXTRA_MATERIAL_GUIDE}`;
+            console.warn(msg);
+            speakKo(msg);
+        }
+    }, [hasDiffWarn, wDiff, hDiff]);
+
+    // 🔊 TTS & Block for Invalid Pricing
+    useEffect(() => {
+        if (!pricing) return;
+        if (pricing.ok === false && pricing.reason) {
+            speakKo(pricing.reason);
+        }
+    }, [pricing?.ok, pricing?.reason]);
+
     // Message Generation
     const customerMessage = useMemo(() => {
         if (!pricing.ok) {
@@ -154,14 +203,15 @@ export default function FieldNewPage() {
 제품: ${doorLabel(door)}
 실측: ${widthMm} × ${heightMm} (mm)
 
-현재 선택 옵션은 가격표가 없어 '문의'가 필요합니다.
-담당자에게 연락 주세요.`;
+❌ ${pricing.reason || "견적 불가: 담당자에게 문의하세요."}
+`;
         }
 
         return `[림스도어 실측/견적 안내]
 고객: ${customerName} (${customerPhone})
 제품: ${doorLabel(door)}
 실측(최소기준): ${widthMm} × ${heightMm} (mm)
+열림방향: ${openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌"}
 
 자재비(확정): ${formatWon(pricing.materialWon)}
 시공비(별도): ${formatWon(pricing.installWon)}
@@ -173,12 +223,7 @@ export default function FieldNewPage() {
 
 입금 계좌:
 ${BANK_LINE}`;
-    }, [customerName, customerPhone, door, widthMm, heightMm, pricing]);
-
-    // Warning for measurement deviation
-    const diffW = Math.max(...widthPoints) - Math.min(...widthPoints);
-    const diffH = Math.max(...heightPoints) - Math.min(...heightPoints);
-    const hasWarn = (widthMm > 0 && Number.isFinite(diffW) && diffW >= 10) || (heightMm > 0 && Number.isFinite(diffH) && diffH >= 10);
+    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection]);
 
     function setPoint(arr: number[], idx: number, value: number) {
         const next = [...arr];
@@ -242,9 +287,11 @@ ${BANK_LINE}`;
                             가로 3점 / 세로 3점을 입력하면 최소값 기준으로 자동 계산됩니다.
                         </div>
 
-                        {hasWarn && (
-                            <div className="mb-4 rounded-xl border border-orange-400/40 bg-orange-400/10 p-3 text-sm">
-                                ⚠️ 실측 오차가 10mm 이상입니다. (가로 Δ{diffW}mm / 세로 Δ{diffH}mm) — 재확인 권장
+                        {hasDiffWarn && (
+                            <div className="mb-4 rounded-xl border border-amber-600/40 bg-amber-950/30 p-4 text-amber-200">
+                                <div className="font-semibold">실측 오차 경고</div>
+                                <div className="text-sm mt-1">가로 오차: {wDiff}mm / 세로 오차: {hDiff}mm</div>
+                                <div className="text-sm mt-2">추가자재(마감재) 사용이 필요할 수 있습니다. 추가 비용 가능성을 고객에게 안내해 주세요.</div>
                             </div>
                         )}
 
@@ -320,10 +367,22 @@ ${BANK_LINE}`;
                             샘플 사진 보기 (구글 사진첩)
                         </button>
 
-
                         {optionsOpen && (
                             <div className="mt-4 space-y-4">
-                                {/* Frame */}
+                                {/* 1. Open Direction */}
+                                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
+                                    <div className="text-sm font-semibold text-zinc-200">도어 열림 방향 (거실에서 현관을 바라보는 기준)</div>
+                                    <select
+                                        value={openDirection}
+                                        onChange={(e) => setOpenDirection(e.target.value as any)}
+                                        className="w-full rounded-xl bg-zinc-900 border border-zinc-700 px-3 py-3 text-zinc-100"
+                                    >
+                                        <option value="LEFT_TO_RIGHT">좌 → 우 열림</option>
+                                        <option value="RIGHT_TO_LEFT">우 → 좌 열림</option>
+                                    </select>
+                                </div>
+
+                                {/* 2. Frame */}
                                 <div className="rounded-xl border border-white/10 p-3">
                                     <div className="font-semibold mb-2">프레임 색상</div>
 
@@ -371,14 +430,14 @@ ${BANK_LINE}`;
                                     </div>
                                 </div>
 
-                                {/* Glass Designs (Moved to Component) */}
+                                {/* 3. Glass Designs (Moved to Component) */}
                                 <GlassDesignOptions
                                     value={glassDesign}
                                     onChange={setGlassDesign}
                                     isSliding={door === "1W_SLIDING"}
                                 />
 
-                                {/* Discount button */}
+                                {/* 4. Discount button */}
                                 <div className="rounded-xl border border-white/10 p-3">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -441,15 +500,18 @@ ${BANK_LINE}`;
                                     value={customerMessage}
                                     readOnly
                                 />
+
+                                {/* Send Button: Disabled if pricing invalid */}
                                 <div className="mt-2 flex gap-2">
                                     <button
-                                        className="px-4 py-3 rounded-xl bg-white text-black font-semibold w-full"
+                                        disabled={!pricing.ok}
+                                        className={`w-full rounded-xl py-3 font-semibold ${pricing.ok ? "bg-indigo-600 hover:bg-indigo-500 text-white" : "bg-zinc-800 text-zinc-500 cursor-not-allowed"}`}
                                         onClick={async () => {
                                             await navigator.clipboard.writeText(customerMessage);
                                             alert("메시지가 복사되었습니다.");
                                         }}
                                     >
-                                        메시지 복사
+                                        {!pricing.ok ? "전송 불가 (견적 오류)" : "메시지 복사"}
                                     </button>
                                 </div>
                             </div>

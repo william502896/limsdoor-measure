@@ -57,6 +57,10 @@ export type PricingOutput = {
     ok: boolean;
     reason?: string;
 
+    // ✅ 추가
+    errors?: string[];
+    warnings?: string[];
+
     // 계산 결과
     baseWon: number;
     sizeSurchargeWon: number;
@@ -176,10 +180,20 @@ export function calcPricing(input: PricingInput): PricingOutput {
     const h = clampInt(input.heightMm);
     const installWon = clampInt(input.installFeeWon ?? 150000);
 
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // ✅ 제작 불가 규칙: 스윙 1도어 / 호패 1도어는 가로 1000mm 초과 불가
+    if ((input.door === "SWING_1" || input.door === "HOPE_1") && w > 1000) {
+        errors.push("스윙/여닫이 1도어는 가로 1000mm 초과 제작 불가입니다.");
+    }
+
     if (w <= 0 || h <= 0) {
         return {
             ok: false,
             reason: "사이즈(mm)가 올바르지 않습니다.",
+            errors,
+            warnings,
             baseWon: 0,
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
@@ -197,6 +211,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
         return {
             ok: false,
             reason: "선택한 도어(자동문)는 현재 가격표가 없어 ‘문의’ 처리입니다.",
+            errors,
+            warnings,
             baseWon: 0,
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
@@ -224,8 +240,28 @@ export function calcPricing(input: PricingInput): PricingOutput {
     // ✅ 고객에게는 시공비 15만 제외한 금액을 "자재비(확정)"으로 표시
     const materialWon = Math.max(0, totalWon - installWon);
 
+    if (errors.length > 0) {
+        return {
+            ok: false,
+            reason: errors[0],
+            errors,
+            warnings,
+            baseWon,
+            sizeSurchargeWon,
+            frameSurchargeWon,
+            glassDesignWon,
+            discountWon,
+            materialWon: 0,
+            installWon,
+            totalWon: 0,
+            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, installWon, discountWon, totalWon: 0, materialWon: 0 },
+        };
+    }
+
     return {
         ok: true,
+        errors,
+        warnings,
         baseWon,
         sizeSurchargeWon,
         frameSurchargeWon,
