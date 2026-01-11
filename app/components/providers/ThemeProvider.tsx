@@ -45,6 +45,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
                 // Initial Apply (Optimistic)
                 setConfig(currentConfig);
 
+                // Skip DB Sync on Login/Auth pages to prevent 406/Auth noise
+                if (pathname === '/login' || pathname === '/' || pathname?.startsWith('/auth')) return;
+
                 // 2. DB Sync
                 const supabase = createSupabaseBrowser();
                 const { data: { user } } = await supabase.auth.getUser();

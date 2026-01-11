@@ -20,7 +20,7 @@ export async function GET() {
 
 // 2025-12-27: Context Injection Helper
 async function getSystemContext() {
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
     let context = "You are LIMS AI Assistant, an expert helper for the 'Limsdoor Measure' system.\n";
     context += "You have access to internal data. Always prioritize 'CONFIRMED SALES PRICES' from the database.\n";
     context += "If specific sales price is missing, you MAY use the 'STATIC PURCHASE COST REFERENCE' below to estimate input costs, but clearly state these are 'Raw Material/Purchase Costs' not 'Sales Prices'.\n";

@@ -1,0 +1,74 @@
+import { supabaseServer } from "@/app/lib/supabase/server";
+import { headers } from "next/headers";
+
+export const dynamic = "force-dynamic";
+
+type RunRow = {
+  id: string;
+  framework: string;
+  source_table: string;
+  prompt: string;
+  result: string;
+  created_at: string;
+};
+
+export default async function MarketingResultsPage() {
+  const sb = supabaseServer();
+  const { data: auth } = await sb.auth.getUser();
+
+  if (!auth?.user) {
+    return <div style={{ padding: 20 }}>로그인이 필요합니다.</div>;
+  }
+
+  // RLS applied automatically for select
+  const { data: rows, error } = await sb
+    .from("marketing_runs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return <div style={{ padding: 20, color: "red" }}>Load Error: {error.message}</div>;
+  }
+
+  const list = (rows ?? []) as RunRow[];
+
+  return (
+    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", fontFamily: "sans-serif" }}>
+      <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>📊 마케팅 자동실행 결과</h1>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20, height: "calc(100vh - 100px)" }}>
+        {/* Left: List */}
+        <div style={{ overflowY: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+          {list.length === 0 && <div style={{ padding: 10, opacity: 0.6 }}>결과가 없습니다.</div>}
+          {list.map((r) => (
+            <DetailLink key={r.id} row={r} />
+          ))}
+        </div>
+
+        {/* Right: Preview (Server-side rendered via searchParam or Client? 
+            To keep it simple one-shot, let's use a Client Component for the Right Pane or just render the first one?
+            Actually, the simplest is a list, and clicking opens a separate 'print' page or a modal.
+            Let's implement a Client Component for the View Area to avoid page reloads.
+        )*/}
+        <ResultViewer runs={list} />
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// Client Component for Viewer
+// ----------------------------------------------------------------------
+"use client";
+import { useState } from "react";
+
+function DetailLink({ row }: { row: any }) {
+  // This is a bit tricky mixing server/client in one file in Next.js App Router without 'use client' at top.
+  // Actually, I should split this file or make the whole page 'use client' (but then I lose SEO/Server fetch).
+  // Better approach: Main Page is Server, Viewer is Client. 
+  // But passing data requires serializable props.
+  return null; 
+}
+
+// Re-writing the file content to be cleaner:
+// page.tsx (Server) -> fetches data -> passes to Client Component

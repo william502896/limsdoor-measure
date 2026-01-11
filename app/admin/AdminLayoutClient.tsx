@@ -3,6 +3,10 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { useStoreHook } from "@/app/lib/store";
+import { PLATFORM_NAME } from "@/app/lib/constants";
+import { AppShell } from "@/app/components/layout/AppShell";
+
 import {
   LayoutDashboard,
   Layout,
@@ -42,6 +46,7 @@ import {
   Smartphone
 } from "lucide-react";
 
+
 type NavItem = {
   label: string;
   href: string;
@@ -54,6 +59,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const router = useRouter();
   const pathname = usePathname();
   const isOnboarding = pathname === "/admin/onboarding";
+  const { currentTenant } = useStoreHook();
+  const brandName = currentTenant?.brandName || PLATFORM_NAME;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
@@ -65,6 +72,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const [checking, setChecking] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
 
   /* Split Items */
   const mainItems: NavItem[] = useMemo(
@@ -76,6 +85,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
         icon: Megaphone,
         id: "marketing",
         children: [
+          { label: "마케팅 리포트", href: "/admin/marketing", icon: FileText },
+          { label: "시크릿 자료실", href: "/admin/secure/secret", icon: Lock },
           { label: "랜딩 제작", href: "/admin/marketing/landings", icon: Layout },
           { label: "브랜드 자산", href: "/admin/marketing/assets", icon: ImageIcon },
           { label: "리드 점수", href: "/admin/marketing/leads", icon: BarChart3 },
@@ -127,7 +138,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       {
         label: "앱 관리",
         href: "#",
-        icon: Coins, // Using Coins icon or something relevant to 'management/billing'
+        icon: Coins,
         id: "apps",
         children: [
           { label: "통합 ERP (Master)", href: "/admin/apps/erp", icon: LayoutGrid, id: "erp-master" },
@@ -136,43 +147,21 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
           { label: "시공 앱 (Install)", href: "/admin/apps/install", icon: Hammer },
         ]
       },
-    ],
-    []
-  );
-
-  const tier1Items: NavItem[] = useMemo(
-    () => [
-      { label: "AI 비서", href: "/admin/ai-assistant", icon: Bot, id: "ai-assistant" },
-      { label: "비용 관리", href: "/admin/costs", icon: Calculator },
-      { label: "거래처 관리", href: "/admin/partners", icon: Building2 },
+      // Tier 1 Folder (Password Protected)
       {
-        label: "인사관리",
+        label: isAdminUnlocked ? "1티어 관리자" : "🔒 1티어 관리자",
         href: "#",
-        icon: Users,
-        id: "personnel",
+        icon: ShieldCheck,
+        id: "tier1-admin",
         children: [
-          { label: "마케팅팀", href: "/admin/personnel/marketing", icon: Megaphone },
-          { label: "영업팀", href: "/admin/personnel/sales", icon: PhoneCall },
-          { label: "관리팀", href: "/admin/personnel/management", icon: Settings },
-          { label: "기획팀", href: "/admin/personnel/planning", icon: FileText },
-          { label: "시공팀", href: "/admin/personnel/install", icon: Hammer },
-          { label: "실측팀", href: "/admin/personnel/measure", icon: Ruler },
-          { label: "AS팀", href: "/admin/personnel/as", icon: Wrench },
+          { label: "AI 비서", href: "/admin/secure/ai-assistant", icon: Bot, id: "ai-assistant" },
+          { label: "비용 관리", href: "/admin/secure/costs", icon: Calculator },
+          { label: "거래처 관리", href: "/admin/secure/partners", icon: Building2 },
+          { label: "품목/자재", href: "/admin/secure/items", icon: Package },
+          { label: "전자명세서", href: "/admin/secure/invoices", icon: Receipt },
+          { label: "UI 디자인", href: "/admin/secure/design", icon: Palette },
         ]
-      },
-      {
-        label: "매입단가",
-        href: "#",
-        icon: Coins,
-        id: "purchase-unit-prices",
-        children: [
-          { label: "단가 관리", href: "/admin/purchase-costs", icon: Calculator },
-          { label: "업체별 단가표", href: "/admin/prices", icon: Banknote },
-        ]
-      },
-      { label: "품목/자재", href: "/admin/items", icon: Package },
-      { label: "전자명세서", href: "/admin/invoices", icon: Receipt },
-      { label: "UI 디자인", href: "/admin/design", icon: Palette },
+      }
     ],
     []
   );
@@ -182,17 +171,24 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     // Check Main Items
     const activeMain = mainItems.find(item => item.children?.some(child => child.href === pathname));
     if (activeMain && activeMain.id) {
-      setExpandedId(activeMain.id);
+      // If expanding Tier 1, ensure unlocked
+      if (activeMain.id === "tier1-admin") {
+        if (isAdminUnlocked) {
+          setExpandedId(activeMain.id);
+        }
+      } else {
+        setExpandedId(activeMain.id);
+      }
     }
-
-    // Check Tier 1 Items
-    const activeTier1 = tier1Items.find(item => item.children?.some(child => child.href === pathname));
-    if (activeTier1 && activeTier1.id) {
-      setExpandedId(activeTier1.id);
-    }
-  }, [pathname, mainItems, tier1Items]);
+  }, [pathname, mainItems, isAdminUnlocked]);
 
   const handleNavClick = (item: NavItem) => {
+    if (item.id === "tier1-admin" && !isAdminUnlocked) {
+      // Redirect to Secure Auth
+      router.push("/admin/secure-auth");
+      return;
+    }
+
     if (item.children) {
       // Toggle
       setExpandedId(prev => prev === item.id ? null : item.id!);
@@ -209,8 +205,19 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const renderNav = (collapsed: boolean) => (
     <>
       <div style={{ marginBottom: 12 }}>
+        {isSuperAdmin && (
+          <button
+            onClick={() => router.push("/ops/console")}
+            className={`w-full mb-3 border-0 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/30 ${collapsed ? "py-3 bg-slate-800 text-[10px]" : "p-3 bg-slate-800 hover:bg-slate-700 text-[13px]"}`}
+            title="운영 콘솔 (Ops)"
+          >
+            <span>🛡️</span>
+            {!collapsed && <span>시스템 관제 (Ops)</span>}
+          </button>
+        )}
+
         <button
-          onClick={() => router.push("/admin/onboarding")}
+          onClick={() => router.push("/admin/onboarding?mode=edit")}
           className={`w-full border-0 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg animate-pulse ${collapsed ? "py-3 bg-gradient-to-br from-indigo-500 to-purple-500 text-[10px]" : "p-3 bg-gradient-to-br from-indigo-500 to-purple-500 text-[13px]"}`}
           title="사용 등록"
         >
@@ -226,25 +233,6 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
         onItemClick={handleNavClick}
         currentPath={pathname}
       />
-
-      {!collapsed && (
-        <div style={{ margin: "20px 0 10px 0", padding: "0 10px", fontSize: "11px", fontWeight: 900, color: "#94a3b8", letterSpacing: "1px", textTransform: "uppercase" }}>
-          🔒 1티어 관리자
-        </div>
-      )}
-      {collapsed && <div className="h-px bg-slate-800 mx-2 my-2" />}
-
-      {/* Conditionally Render Tier 1 Items */}
-      {isAdminUnlocked && (
-        <NavList
-          items={tier1Items}
-          collapsed={collapsed}
-          expandedId={expandedId}
-          onItemClick={handleNavClick}
-          showTier1Style={true}
-          currentPath={pathname}
-        />
-      )}
     </>
   );
 
@@ -256,17 +244,32 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       if (user) {
         // Logged in user? Check profile
         const { data: profile } = await supabase.from("프로필").select("company_id").eq("id", user.id).single();
+
         if (profile?.company_id) {
           // Valid User -> Not Demo
           setIsDemo(false);
-          setChecking(false);
+
+          if (isOnboarding) {
+            router.replace("/admin");
+          } else {
+            setChecking(false);
+          }
         } else {
-          // No profile? Check if they are in Demo Mode
+          // No company_id?
+          // Check Demo Fallback
           if (document.cookie.includes("company_id=demo")) {
             setIsDemo(true);
             setChecking(false);
           } else {
-            router.replace("/admin/onboarding");
+            // Real user with no company
+            if (!isOnboarding) {
+              router.replace("/admin/onboarding");
+              // Allow UI to resolve so we don't hang if redirect is slow, or if logic overlaps
+              setChecking(false);
+            } else {
+              // On onboarding page, let them define company
+              setChecking(false);
+            }
           }
         }
       } else {
@@ -276,6 +279,9 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
           setChecking(false);
         } else {
           // Neither User nor Demo? -> Onboarding
+          if (!isOnboarding) {
+            router.replace("/admin/onboarding");
+          }
           setChecking(false);
         }
       }
@@ -286,6 +292,23 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       window.addEventListener("tier1-login", checkTier1);
       return () => window.removeEventListener("tier1-login", checkTier1);
     }
+
+    // Superadmin Check (Ops Console)
+    async function checkSuperAdmin() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Check standard 'profiles' table first (New System)
+      const { data: p1 } = await supabase.from("profiles").select("is_superadmin").eq("user_id", user.id).single();
+      if (p1?.is_superadmin) {
+        setIsSuperAdmin(true);
+        return;
+      }
+
+      // Fallback or Legacy check if needed, but 'profiles' is the standard now.
+    }
+    checkSuperAdmin();
+
     checkOnboarding();
   }, [router]);
 
@@ -297,125 +320,97 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     );
   }
 
+  if (isOnboarding) {
+    return <>{children}</>;
+  }
+
+  // Protected Routes Check
+  const isTier1Route = mainItems
+    .find(item => item.id === "tier1-admin")
+    ?.children?.some(child => pathname.startsWith(child.href));
+
   return (
-    // Light Theme Shell: bg-slate-50 text-slate-900
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-
-      {/* ====== MOBILE TOPBAR (<=767px) ====== */}
-      {!isOnboarding && (
-        <header className="sticky top-0 z-50 flex items-center gap-2.5 p-2.5 border-b border-slate-200 bg-white/90 backdrop-blur md:hidden">
-          <button className="w-10 h-10 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center" onClick={() => setDrawerOpen(true)}>
-            ☰
-          </button>
-          <div className="font-extrabold tracking-tight text-slate-800">LIMSDOOR 관리자</div>
-          <div className="w-10 h-10" />
-        </header>
-      )}
-
-      <div className="flex w-full">
-        {/* ====== DESKTOP SIDEBAR (>=1024px) ====== */}
-        {/* Dark Sidebar: bg-slate-900 border-r border-slate-800 */}
-        {!isOnboarding && (
-          <aside className="hidden lg:block w-[280px] min-h-screen border-r border-slate-800 bg-slate-900 text-slate-300 p-4 sticky top-0 self-start shadow-xl z-20">
-            <Brand />
-            {renderNav(false)}
-
-            <div className="mt-auto mb-6 px-2">
-              <button
-                onClick={async () => {
-                  if (confirm("정말 초기화 하시겠습니까?\n등록된 정보가 초기화되거나 로그아웃 됩니다.")) {
-                    if (isDemo) {
-                      // Clear Demo Cookies
-                      document.cookie = "company_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-                      document.cookie = "onboarded=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-                      window.location.href = "/admin/onboarding";
-                    } else {
-                      // Real User: Remove company_id link
-                      const { data: { user } } = await supabase.auth.getUser();
-                      if (user) {
-                        await supabase.from("프로필").update({ company_id: null }).eq("id", user.id);
-                      }
-                      window.location.href = "/admin/onboarding";
-                    }
+    <AppShell
+      brandName={brandName}
+      sidebarContent={renderNav(false)}
+      sidebarFooter={
+        <div className="opacity-40 text-[10px] leading-relaxed">
+          LimsDoor Admin v1.0
+          <br />
+          Mode: {isDemo ? "Demo" : "Live"}
+          <button
+            onClick={async () => {
+              if (confirm("정말 초기화 하시겠습니까?\n등록된 정보가 초기화되거나 로그아웃 됩니다.")) {
+                document.cookie = "tier1_ui=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+                if (isDemo) {
+                  document.cookie = "company_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+                  document.cookie = "onboarded=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+                  window.location.href = "/admin/onboarding";
+                } else {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) {
+                    await supabase.from("프로필").update({ company_id: null }).eq("id", user.id);
                   }
-                }}
-                className="w-full py-2.5 rounded-lg border border-slate-700 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 text-slate-500 text-xs font-bold transition-all flex items-center justify-center gap-2"
-              >
-                <LogOut size={14} />
-                초기화
-              </button>
-            </div>
-            <FooterHint />
-          </aside>
-        )}
+                  window.location.href = "/admin/onboarding";
+                }
+              }
+            }}
+            className="mt-2 flex items-center gap-1 hover:text-red-500 underline"
+          >
+            <LogOut size={10} /> 초기화 (Logout)
+          </button>
 
-        {/* ====== TABLET SIDEBAR (768~1023px) ====== */}
-        {!isOnboarding && (
-          <aside className={`hidden md:block lg:hidden min-h-screen border-r border-slate-800 bg-slate-900 text-slate-300 p-3 sticky top-0 self-start transition-all duration-200 z-20 ${tabletCollapsed ? "w-[84px]" : "w-[240px]"}`}>
-            <div className="flex items-center justify-between gap-2.5 mb-6">
-              <div className={`w-10 h-10 rounded-lg grid place-items-center bg-indigo-600 text-white font-black shrink-0`}>
-                L
-              </div>
-              <button
-                className="w-8 h-8 rounded hover:bg-slate-800 text-slate-400 flex items-center justify-center"
-                onClick={() => setTabletCollapsed((v) => !v)}
-                aria-label="toggle tablet sidebar"
-              >
-                {tabletCollapsed ? "»" : "«"}
-              </button>
-            </div>
-
-            {renderNav(tabletCollapsed)}
-          </aside>
-        )}
-
-        {/* ====== MAIN ====== */}
-        <main className="flex-1 min-w-0 flex flex-col transition-all duration-300">
-          {/* Desktop Header (Optional, for Title) */}
-          <div className="hidden md:flex bg-white border-b border-slate-200 px-6 py-4 items-center justify-between sticky top-0 z-10">
-            <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">통합 대시보드 (Admin)</h1>
-            <div className="text-sm text-slate-400">Desktop View</div>
-          </div>
-
-          <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto w-full">
-            {children}
-          </div>
-        </main>
-      </div>
-
-      {/* ====== MOBILE DRAWER (<=767px) ====== */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setDrawerOpen(false)}>
-          <div className="absolute top-0 left-0 w-[80%] max-w-[320px] h-full bg-slate-900 text-slate-300 border-r border-slate-800 p-4 flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="font-bold text-white">메뉴</div>
-              <button className="p-1 rounded hover:bg-slate-800 text-slate-400" onClick={() => setDrawerOpen(false)}>
-                ✕
-              </button>
-            </div>
-
-            <Brand />
-            <div className="h-4" />
-
-            <div className="overflow-y-auto flex-1 scrollbar-hide">
-              {renderNav(false)}
-            </div>
-            <FooterHint />
-          </div>
+          {isAdminUnlocked && (
+            <button
+              onClick={() => {
+                if (confirm("1티어 관리자 모드를 잠그시겠습니까?")) {
+                  document.cookie = "tier1_ui=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+                  setIsAdminUnlocked(false);
+                  window.location.reload();
+                }
+              }}
+              className="mt-2 flex items-center gap-1 text-slate-400 hover:text-indigo-400 font-bold transition-colors"
+            >
+              🔒 1티어 잠금 (Lock)
+            </button>
+          )}
         </div>
-      )}
-    </div>
+      }
+    >
+      <div className="max-w-[1280px] mx-auto w-full">
+        {/* Navigation Header */}
+        <header className="flex items-center justify-between px-6 py-4 mb-6 bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 transition-all">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors font-medium text-sm"
+          >
+            <ChevronDown className="rotate-90" size={18} />
+            <span>뒤로가기</span>
+          </button>
+
+          <button
+            onClick={() => router.push('/admin')}
+            className="flex items-center gap-2 px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium text-sm"
+          >
+            <span>닫기</span>
+            <X size={18} />
+          </button>
+        </header>
+
+        {children}
+      </div>
+    </AppShell>
   );
 }
 
-function Brand() {
+function Brand({ name }: { name: string }) {
   return (
     <div className="flex items-center gap-3 mb-6 px-2">
       <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black shrink-0">
-        L
+        {name[0]?.toUpperCase()}
       </div>
       <div>
-        <div className="font-bold text-white text-lg tracking-tight">LimsDoor</div>
+        <div className="font-bold text-white text-lg tracking-tight">{name}</div>
       </div>
     </div>
   );
@@ -442,14 +437,15 @@ function NavList({
         const isExpanded = expandedId === it.id;
         const Icon = it.icon;
 
+
         // Style Logic
         const itemStyle = showTier1Style
-          ? "text-indigo-300 hover:text-white hover:bg-slate-800"
-          : "text-slate-400 hover:text-white hover:bg-slate-800";
+          ? "text-indigo-600 font-bold hover:bg-slate-100"
+          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium";
 
         const iconStyle = showTier1Style
-          ? "text-indigo-400"
-          : "text-slate-500 group-hover:text-slate-300";
+          ? "text-indigo-500"
+          : "text-slate-400 group-hover:text-indigo-500 transition-colors";
 
         return (
           <React.Fragment key={it.id || it.label}>
@@ -466,9 +462,9 @@ function NavList({
 
               {!collapsed && (
                 <>
-                  <span className={`flex-1 text-sm font-medium`}>{it.label}</span>
+                  <span className={`flex-1 text-sm`}>{it.label}</span>
                   {it.children && (
-                    <span className="text-[10px] opacity-50">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
+                    <span className="text-[10px] opacity-40">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
                   )}
                 </>
               )}
@@ -476,7 +472,7 @@ function NavList({
 
             {/* Sub Menu */}
             {it.children && isExpanded && !collapsed && (
-              <div className="pl-4 mt-1 mb-2 space-y-1 border-l border-slate-800 ml-4">
+              <div className="pl-4 mt-1 mb-2 space-y-1 border-l border-indigo-100 ml-4">
                 {it.children.map(sub => {
                   const SubIcon = sub.icon;
                   const isActive = global.window && window.location.pathname === sub.href; // Simple check, or pass pathname from props
@@ -490,7 +486,7 @@ function NavList({
                         onItemClick({ ...sub, href: sub.href }); // Delegate to parent handler or direct router push
                       }}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-[13px] transition-colors block
-                            ${isActive ? "text-white bg-slate-800 font-bold" : "text-slate-500 hover:text-white hover:bg-slate-800"}
+                            ${isActive ? "text-indigo-700 bg-indigo-50 font-bold" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"}
                         `}
                     >
                       <span className="shrink-0">
@@ -513,10 +509,14 @@ function NavList({
 
 function FooterHint() {
   return (
-    <div className="mt-auto pt-6 opacity-40 text-[10px] leading-relaxed border-t border-slate-800/50">
+    <div className="mt-auto pt-6 opacity-40 text-[10px] leading-relaxed border-t border-slate-200">
       LimsDoor Admin v1.0
       <br />
       Light Mode
+      <br />
+      <a href="/ops/console" className="hover:text-indigo-600 underline mt-2 block text-indigo-400">
+        [Ops Console]
+      </a>
     </div>
   );
 }

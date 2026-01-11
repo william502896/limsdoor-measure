@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 
-const MAX_LAUNCHES = 5;
-const MAX_ACTIONS = 5;
+const MAX_LAUNCHES = 999999; // Unlimited
+const MAX_ACTIONS = 999999; // Unlimited
 
 type DemoLimitState = {
     isReady: boolean;

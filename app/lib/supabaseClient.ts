@@ -1,4 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import { SupabaseClient, createClient } from "@supabase/supabase-js";
+
+let supabaseBrowserClient: SupabaseClient | null = null;
 
 const createStub = (message: string) => {
     const dbStub: any = {
@@ -34,6 +37,7 @@ const createStub = (message: string) => {
             getSession: () => Promise.resolve({ data: { session: null }, error: null }),
             onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => { } } } }),
             signInWithPassword: () => Promise.resolve({ data: {}, error: { message: message } }),
+            signUp: () => Promise.resolve({ data: { user: null }, error: { message: message } }), // Added missing method
             signOut: () => Promise.resolve({ error: null }),
         },
         then: (resolve: any) => resolve({ data: [], error: { message }, count: 0 })
@@ -42,6 +46,8 @@ const createStub = (message: string) => {
 };
 
 export function createSupabaseBrowser() {
+    if (supabaseBrowserClient) return supabaseBrowserClient;
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -50,7 +56,8 @@ export function createSupabaseBrowser() {
         return createStub('Supabase configuration is missing. Please check your environment variables.');
     }
 
-    return createClient(url, anonKey);
+    supabaseBrowserClient = createBrowserClient(url, anonKey);
+    return supabaseBrowserClient;
 }
 
 export function createSupabaseAdmin() {

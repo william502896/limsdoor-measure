@@ -41,20 +41,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "paymentId, status는 필수입니다." }, { status: 400 });
         }
 
-        const sb = supabaseAdmin();
+        const { updateWithCompany } = await import("@/app/lib/companyDb");
 
-        // 1) 결제 row 업데이트
+        // 1) 결제 row 업데이트 (Tenant Safe)
         const updatePayload: any = { status };
         if (payhere_link_url) updatePayload.payhere_link_url = payhere_link_url;
 
-        const { data: payment, error: pErr } = await sb
-            .from("payments")
-            .update(updatePayload)
-            .eq("id", paymentId)
-            .select("id,status,lead_id,estimate_id,customer_phone")
-            .single();
-
-        if (pErr) throw pErr;
+        // updateWithCompany returns the Updated Data
+        const payment = await updateWithCompany("payments", updatePayload, { id: paymentId });
 
         // 2) leadId 확정
         const finalLeadId = leadId || payment?.lead_id || null;

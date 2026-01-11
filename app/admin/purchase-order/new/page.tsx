@@ -6,7 +6,9 @@ import { createSupabaseBrowser } from "@/app/lib/supabaseClient";
 import { ArrowLeft, Save, Building2, Calculator, Truck, Calendar, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function NewPurchaseOrderPage() {
+import { Suspense } from "react";
+
+function NewPurchaseOrderContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const orderId = searchParams.get("orderId");
@@ -346,5 +348,13 @@ export default function NewPurchaseOrderPage() {
 
             </div>
         </div>
+    );
+}
+
+export default function NewPurchaseOrderPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Loading PO...</div>}>
+            <NewPurchaseOrderContent />
+        </Suspense>
     );
 }

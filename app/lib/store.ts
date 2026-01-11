@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PLATFORM_NAME } from "./constants";
 
 // =============================================================================
 // GLOBAL TYPES (Platform)
@@ -62,7 +63,7 @@ export interface InstallRevenue {
 export interface Tenant {
     id: string;         // e.g., "headquarters", "yanggu_branch"
     name: string;       // "림스도어 본사", "양구점"
-    brandName: string;  // "LIMSDOOR"
+    brandName?: string;  // [MODIFIED] Optional, defaults to FieldX
     theme: "light" | "dark";
     defaultUiMode: "OFFICE" | "FIELD";
     googleDriveLink?: string; // URL for Portfolio
@@ -232,6 +233,7 @@ export interface TenantSettings {
         contact: string;
         address?: string;
         logoUrl?: string; // For Branded App
+        google_photos_url?: string; // New: Google Photos
     };
     homeLayout: {
         presets: Record<Role, string[]>; // { "MEASURER": ["measure", "schedule"] }
@@ -260,6 +262,8 @@ export interface TenantState {
 const GLOBAL_KEY = "limsdoor_v2_global";
 const TENANT_PREFIX = "limsdoor_v2_tenant_";
 
+
+
 // Mock Data Seeder
 const seedGlobal = (): GlobalState => ({
     users: [
@@ -271,7 +275,7 @@ const seedGlobal = (): GlobalState => ({
         { id: "u_new_install", name: "신규시공자", phone: "010-3333-3333", roles: { "t_head": "INSTALLER" }, currentTenantId: "t_head", status: "PENDING" }
     ],
     tenants: [
-        { id: "t_head", name: "림스도어 본사", brandName: "LIMSDOOR", theme: "light", defaultUiMode: "OFFICE" },
+        { id: "t_head", name: "림스도어 본사", brandName: "FieldX", theme: "light", defaultUiMode: "OFFICE" },
         { id: "t_yanggu", name: "양구점", brandName: "LIMSDOOR 양구", theme: "dark", defaultUiMode: "FIELD" }
     ],
     currentUser: null, // Initially logged out (or will auto-login mock)
@@ -316,6 +320,19 @@ export function useStoreHook() {
                 const parsed = JSON.parse(raw);
                 if (!parsed.notifications) {
                     parsed.notifications = [];
+                }
+                // Migration: Force FieldX brand
+                let migrated = false;
+                if (parsed.tenants) {
+                    parsed.tenants.forEach((t: any) => {
+                        if (t.id === 't_head' && t.brandName === 'LIMSDOOR') {
+                            t.brandName = 'FieldX';
+                            migrated = true;
+                        }
+                    });
+                }
+                if (migrated) {
+                    localStorage.setItem(GLOBAL_KEY, JSON.stringify(parsed));
                 }
                 setGlobal(parsed);
             } else {

@@ -2,11 +2,18 @@
 
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Calculator, Camera, Check, ChevronDown, Eraser, Info, Mic, RotateCcw, Send, Settings, X, ImageIcon, Search, Phone, User, MapPin, Eye, CloudUpload, MessageCircle, Globe, ShoppingBag, Youtube, Instagram, Facebook, Smartphone, Languages, AlertTriangle, Volume2, MicOff } from "lucide-react";
+import { ArrowLeft, Calculator, Camera, Check, ChevronDown, Eraser, Info, Mic, RotateCcw, Send, Settings, X, ImageIcon, Search, Phone, User, MapPin, Eye, CloudUpload, MessageCircle, Globe, ShoppingBag, Youtube, Instagram, Facebook, Smartphone, Languages, AlertTriangle, Volume2, MicOff, Coins } from "lucide-react";
 import VoiceInput from "@/app/components/VoiceInput";
 import NaverMapPicker from "@/app/components/NaverMapPicker";
 import AddressSearchModal from "@/app/components/AddressSearchModal";
 import { ParsedMeasurement } from "@/app/lib/voiceMeasurement";
+import {
+    DoorType,
+    GlassDesign,
+    getFrameOptions,
+    calcQuote,
+    buildCustomerMessage,
+} from "@/app/lib/pricing";
 
 // TikTok Icon Component
 function TikTokIcon({ size = 20, className = "" }: { size?: number, className?: string }) {
@@ -165,6 +172,17 @@ function FieldCorrectionContent() {
         syncPrices();
     }, []);
 
+    // 0. Guard: Redirect to /measure if direct access (missing ?from=)
+    // 0. Guard: Redirect to /measure if direct access (missing ?from=)
+    useEffect(() => {
+        if (typeof window === "undefined") return; // Safety check
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get("from")) {
+            console.warn("Direct access blocked. Redirecting to Landing.");
+            window.location.replace("/measure");
+        }
+    }, []);
+
     // --- System Loading ---
     const [targetOrder, setTargetOrder] = useState<any>(null);
     const [showComparisonModal, setShowComparisonModal] = useState(false);
@@ -212,6 +230,26 @@ function FieldCorrectionContent() {
     const [loadingGPS, setLoadingGPS] = useState(false);
     const [addressModalOpen, setAddressModalOpen] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false); // NEW
+
+    // --- Pricing & Quote Calculator State ---
+    const [doorType, setDoorType] = useState<DoorType>("3T_MANUAL");
+    // 사이즈(mm) - separate from widthPoints/heightPoints for global calc consistency if needed, 
+    // or we can sync them. User asked for "additional state".
+    const [widthMm, setWidthMm] = useState<number>(1200);
+    const [heightMm, setHeightMm] = useState<number>(2300);
+
+    // 프레임 선택 (도어 선택에 따라 옵션 바뀜)
+    const frameOptions = useMemo(() => getFrameOptions(doorType), [doorType]);
+    const [framePick, setFramePick] = useState(frameOptions[0]);
+    // ⚠️ doorType 바뀌면 framePick 초기화 필요 (아래 useEffect 권장)
+
+    // 유리 디자인 옵션(여러 개 선택 가능)
+    const [glassDesigns, setGlassDesigns] = useState<GlassDesign[]>(["BASIC"]);
+
+    // 현장할인
+    const [measurerOption, setMeasurerOption] = useState<"NONE" | "REPEAT" | "CONDITIONAL" | "OTHER">("NONE");
+    const [eventOption, setEventOption] = useState<"NONE" | "EVENT_PRODUCT" | "CLEARANCE" | "OTHER">("NONE");
+    const [discountAmount, setDiscountAmount] = useState<number>(0);
 
     // --- Effects ---
     // Walkie Talkie Init
@@ -289,6 +327,12 @@ function FieldCorrectionContent() {
         }
     }, [category]);
 
+    // Pricing Logic: Reset Frame on Door Change
+    useEffect(() => {
+        const opts = getFrameOptions(doorType);
+        setFramePick(opts[0]);
+    }, [doorType]);
+
     useEffect(() => {
         if (detail.includes("원슬라이딩")) setSlidingMode("벽부형");
     }, [detail]);
@@ -334,6 +378,56 @@ function FieldCorrectionContent() {
             tts: "" // Safe condition - no voice warning needed
         };
     }, [widthRange, isOneSliding, confirmedWidth]);
+
+    // --- Pricing Calculator Computed ---
+    const quote = useMemo(() => {
+        return calcQuote({
+            doorType,
+            widthMm,
+            heightMm,
+            frameCoating: framePick.coating,
+            frameColor: framePick.color,
+            glassBase: "CLEAR_TEMPERED",
+            glassDesigns,
+            discount: { measurerOption, eventOption, discountAmount },
+            installFee: 150000,
+        });
+    }, [doorType, widthMm, heightMm, framePick, glassDesigns, measurerOption, eventOption, discountAmount]);
+
+    const doorLabelMap: Record<DoorType, string> = {
+        "3T_MANUAL": "수동 3연동",
+        "1S_SLIDING": "원슬라이딩",
+        "SWING_1": "스윙 1도어",
+        "SWING_2": "스윙 2도어",
+        "HOPE_1": "여닫이(호패) 1도어",
+        "HOPE_2": "여닫이(호패) 2도어",
+    };
+
+    const glassDesignSummary = useMemo(() => {
+        const labels: Record<GlassDesign, string> = {
+            BASIC: "간살 기본형(2줄)",
+            MUNTIN_ADD_2LINES: "간살 2줄 추가(+3만)",
+            ARCH: "아치형디자인",
+            BOTTOM_PANEL: "하부고시(+28만)",
+            CORNER_ARCH: "모서리아치(+9만)",
+            SLIDING_BIG_ARCH_V: "원슬라이딩 세로 큰아치(+40만)",
+        };
+        return glassDesigns.map(d => labels[d]).join(", ");
+    }, [glassDesigns]);
+
+    const customerMsg = useMemo(() => {
+        return buildCustomerMessage({
+            customerName,
+            customerPhone,
+            doorLabel: doorLabelMap[doorType],
+            widthMm,
+            heightMm,
+            frameLabel: framePick.label,
+            glassLabel: "투명 강화유리",
+            glassDesignSummary,
+            quote,
+        });
+    }, [customerName, customerPhone, doorType, widthMm, heightMm, framePick.label, glassDesignSummary, quote]);
 
     // --- NEW: Miso Sales Price Integration ---
     const [misoPriceData, setMisoPriceData] = useState<{ base: number, total: number, options: number, isMiso: boolean }>({ base: 0, total: 0, options: 0, isMiso: false });
@@ -1631,6 +1725,269 @@ function FieldCorrectionContent() {
                     </div >
                 </section >
 
+                {/* --- NEW PRICING SECTION --- */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
+                    <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                        <Coins size={24} className="text-yellow-400" />
+                        상세 견적 및 옵션
+                    </h2>
+
+                    {/* ✅ 도어 선택 */}
+                    <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-slate-300">도어 종류</label>
+                        <select
+                            value={doorType}
+                            onChange={(e) => setDoorType(e.target.value as DoorType)}
+                            className="w-full bg-slate-800 border-slate-700 rounded-lg p-3 text-white"
+                        >
+                            <option value="3T_MANUAL">수동 3연동</option>
+                            <option value="1S_SLIDING">원슬라이딩</option>
+                            <option value="SWING_1">스윙 1도어</option>
+                            <option value="SWING_2">스윙 2도어</option>
+                            <option value="HOPE_1">여닫이(호패) 1도어</option>
+                            <option value="HOPE_2">여닫이(호패) 2도어</option>
+                        </select>
+                    </div>
+
+                    {/* ✅ 사이즈 */}
+                    <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-slate-300">사이즈(mm)</label>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <span className="text-xs text-slate-500 mb-1 block">가로</span>
+                                <input
+                                    type="number"
+                                    value={widthMm}
+                                    onChange={(e) => setWidthMm(Number(e.target.value || 0))}
+                                    placeholder="가로(mm)"
+                                    className="w-full bg-slate-800 border-slate-700 rounded-lg p-3 text-white"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <span className="text-xs text-slate-500 mb-1 block">세로</span>
+                                <input
+                                    type="number"
+                                    value={heightMm}
+                                    onChange={(e) => setHeightMm(Number(e.target.value || 0))}
+                                    placeholder="세로(mm)"
+                                    className="w-full bg-slate-800 border-slate-700 rounded-lg p-3 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="text-xs text-amber-500/80">
+                            기준 사이즈 초과 시 100mm당 70,000원 추가(가로/세로 중 큰 초과 기준)
+                        </div>
+                    </div>
+
+                    {/* ✅ 프레임 색상(도어별 분류 선택) */}
+                    <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-slate-300">프레임 색상</label>
+                        <select
+                            value={`${framePick.coating}:${framePick.color}`}
+                            onChange={(e) => {
+                                const [coating, color] = e.target.value.split(":");
+                                const picked = frameOptions.find(
+                                    (x) => x.coating === coating && x.color === color
+                                );
+                                if (picked) setFramePick(picked);
+                            }}
+                            className="w-full bg-slate-800 border-slate-700 rounded-lg p-3 text-white"
+                        >
+                            {frameOptions.map((opt) => (
+                                <option key={`${opt.coating}:${opt.color}`} value={`${opt.coating}:${opt.color}`}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* ✅ 유리 디자인 선택 */}
+                    <div className="grid gap-2">
+                        <label className="text-sm font-semibold text-slate-300">유리 디자인</label>
+
+                        <div className="space-y-2 bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+                            <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-800/50 p-2 rounded transition">
+                                <input
+                                    type="checkbox"
+                                    checked={glassDesigns.includes("MUNTIN_ADD_2LINES")}
+                                    onChange={(e) => {
+                                        setGlassDesigns((prev) =>
+                                            e.target.checked
+                                                ? Array.from(new Set([...prev, "MUNTIN_ADD_2LINES"]))
+                                                : prev.filter((x) => x !== "MUNTIN_ADD_2LINES")
+                                        );
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                                <span className="text-slate-300">간살 2줄 추가(+30,000원)</span>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-800/50 p-2 rounded transition">
+                                <input
+                                    type="checkbox"
+                                    checked={glassDesigns.includes("ARCH")}
+                                    onChange={(e) => {
+                                        setGlassDesigns((prev) =>
+                                            e.target.checked ? Array.from(new Set([...prev, "ARCH"])) : prev.filter((x) => x !== "ARCH")
+                                        );
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                                <span className="text-slate-300">아치형 디자인(도어/도어수에 따라 22~24만원)</span>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-800/50 p-2 rounded transition">
+                                <input
+                                    type="checkbox"
+                                    checked={glassDesigns.includes("BOTTOM_PANEL")}
+                                    onChange={(e) => {
+                                        setGlassDesigns((prev) =>
+                                            e.target.checked ? Array.from(new Set([...prev, "BOTTOM_PANEL"])) : prev.filter((x) => x !== "BOTTOM_PANEL")
+                                        );
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                                <span className="text-slate-300">하부고시(+280,000원)</span>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-800/50 p-2 rounded transition">
+                                <input
+                                    type="checkbox"
+                                    checked={glassDesigns.includes("CORNER_ARCH")}
+                                    onChange={(e) => {
+                                        setGlassDesigns((prev) =>
+                                            e.target.checked ? Array.from(new Set([...prev, "CORNER_ARCH"])) : prev.filter((x) => x !== "CORNER_ARCH")
+                                        );
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                                <span className="text-slate-300">모서리 아치(+90,000원)</span>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer hover:bg-slate-800/50 p-2 rounded transition">
+                                <input
+                                    type="checkbox"
+                                    checked={glassDesigns.includes("SLIDING_BIG_ARCH_V")}
+                                    onChange={(e) => {
+                                        setGlassDesigns((prev) =>
+                                            e.target.checked
+                                                ? Array.from(new Set([...prev, "SLIDING_BIG_ARCH_V"]))
+                                                : prev.filter((x) => x !== "SLIDING_BIG_ARCH_V")
+                                        );
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                                <span className="text-slate-300">원슬라이딩 세로 큰아치(+400,000원)</span>
+                            </label>
+
+                            <div className="text-xs text-slate-500 pt-2 border-t border-slate-800">
+                                기본: 간살 기본형 2줄 포함(추가금 없음)
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ✅ 현장할인 */}
+                    <div className="bg-slate-800/30 border border-slate-700 p-4 rounded-xl space-y-4">
+                        <div className="font-bold text-slate-200">현장 할인(금액 확정 전)</div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm text-slate-400 block mb-1">실측자 옵션</label>
+                                <select
+                                    value={measurerOption}
+                                    onChange={(e) => setMeasurerOption(e.target.value as any)}
+                                    className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-sm text-white"
+                                >
+                                    <option value="NONE">없음</option>
+                                    <option value="REPEAT">재구매</option>
+                                    <option value="CONDITIONAL">조건부</option>
+                                    <option value="OTHER">기타</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm text-slate-400 block mb-1">행사 제품 옵션</label>
+                                <select
+                                    value={eventOption}
+                                    onChange={(e) => setEventOption(e.target.value as any)}
+                                    className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-sm text-white"
+                                >
+                                    <option value="NONE">없음</option>
+                                    <option value="EVENT_PRODUCT">행사 제품</option>
+                                    <option value="CLEARANCE">리퍼/클리어런스</option>
+                                    <option value="OTHER">기타</option>
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-sm text-slate-400 block mb-1">할인 금액(원)</label>
+                                <input
+                                    type="number"
+                                    value={discountAmount}
+                                    onChange={(e) => setDiscountAmount(Number(e.target.value || 0))}
+                                    placeholder="예: 50000"
+                                    className="w-full bg-slate-800 border-slate-700 rounded-lg p-2 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ✅ 자동 견적 요약(고객 발송 기준) */}
+                    <div className="border-2 border-green-600/50 bg-green-900/10 p-4 rounded-xl space-y-3">
+                        <div className="font-extrabold text-green-400 mb-2">자동 견적(고객 발송용)</div>
+
+                        <div className="space-y-1 text-sm text-slate-300">
+                            <div className="flex justify-between"><span>기준가:</span> <span>{quote.basePrice.toLocaleString()}원</span></div>
+                            <div className="flex justify-between"><span>사이즈 추가:</span> <span>{quote.sizeExtra.toLocaleString()}원</span></div>
+                            <div className="flex justify-between"><span>색상 추가:</span> <span>{quote.frameExtra.toLocaleString()}원</span></div>
+                            <div className="flex justify-between"><span>유리 디자인 추가:</span> <span>{quote.glassExtra.toLocaleString()}원</span></div>
+                            <div className="flex justify-between pt-2 border-t border-slate-700 text-slate-400"><span>소계:</span> <span>{quote.subtotal.toLocaleString()}원</span></div>
+                            <div className="flex justify-between text-red-400"><span>현장할인:</span> <span>-{quote.discount.toLocaleString()}원</span></div>
+                        </div>
+
+                        <hr className="border-slate-700/50 my-2" />
+
+                        <div className="flex justify-between items-center text-lg font-black text-white">
+                            <span>총액(시공비 포함)</span>
+                            <span>{quote.total.toLocaleString()}원</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-bold text-slate-300">
+                            <span>자재비 확정(시공비 15만원 제외)</span>
+                            <span>{quote.materialPrice.toLocaleString()}원</span>
+                        </div>
+
+                        <div className="mt-2 opacity-80 text-xs text-slate-500">
+                            안내: 시공비는 시공 후 결제 / 자재비는 입금이 되어야 해당 제품 제작이 진행됩니다.
+                        </div>
+
+                        <textarea
+                            value={customerMsg}
+                            readOnly
+                            className="w-full h-48 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 font-mono mt-2"
+                        />
+
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    await navigator.clipboard.writeText(customerMsg);
+                                    toast.success("고객 메시지가 복사되었습니다.");
+                                }}
+                                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition flex items-center justify-center gap-2"
+                            >
+                                <span className="text-lg">📋</span>
+                                메시지 복사
+                            </button>
+
+                            <a
+                                href={`sms:${customerPhone}?&body=${encodeURIComponent(customerMsg)}`}
+                                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold transition flex items-center justify-center gap-2"
+                            >
+                                <span className="text-lg">💬</span>
+                                문자 앱 열기
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 {/* 6. Summary Block */}
                 < div className="bg-slate-100 rounded-xl p-4 text-xs space-y-1 text-slate-600 font-mono" >
                     <div>• 고객: {customerName} ({customerPhone})</div>
@@ -1758,6 +2115,8 @@ function FieldCorrectionContent() {
                     </div>
                 )
             }
+
+
 
 
             <AddressSearchModal

@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, BarChart2, FileText, Smartphone, ExternalLink } from "lucide-react";
 
-export default function LandingListPage() {
+import { Suspense } from "react";
+
+function LandingListContent() {
     const searchParams = useSearchParams();
     const adminKey = searchParams.get("key") || "";
     const [list, setList] = useState<any[]>([]);
@@ -122,5 +124,13 @@ export default function LandingListPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function LandingListPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Loading List...</div>}>
+            <LandingListContent />
+        </Suspense>
     );
 }

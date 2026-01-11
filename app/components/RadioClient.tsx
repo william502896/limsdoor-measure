@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Home, Mic, Users, Settings, Volume2, MicOff, Signal, RefreshCw, LogOut, MessageSquare, Send, X, ArrowLeft } from 'lucide-react';
 import { supabase, isStub } from '@/app/lib/supabase';
 import { useSearchParams } from 'next/navigation';
+import { PLATFORM_NAME } from '@/app/lib/constants';
 
 // --- Environment Check Helper ---
 function getPublicEnv() {
@@ -447,7 +448,7 @@ export default function RadioClient({ initialChannel, onClose, isModal = false }
         const shareUrl = url.toString();
 
         if (navigator.share) {
-            navigator.share({ title: `LIMSDOOR Radio - ${channelId}`, text: `${channelId} 채널 초대`, url: shareUrl }).catch(console.error);
+            navigator.share({ title: `${PLATFORM_NAME} Radio - ${channelId}`, text: `${channelId} 채널 초대`, url: shareUrl }).catch(console.error);
         } else {
             try {
                 const textArea = document.createElement("textarea");
@@ -492,7 +493,7 @@ export default function RadioClient({ initialChannel, onClose, isModal = false }
                 )}
 
                 <Signal size={64} className="text-indigo-500 mb-6" />
-                <h1 className="text-3xl font-black text-white mb-2 tracking-widest">LIMSDOOR RADIO</h1>
+                <h1 className="text-3xl font-black text-white mb-2 tracking-widest">{PLATFORM_NAME} RADIO</h1>
 
                 {/* Robust Env Warning */}
                 {!env.ok && (

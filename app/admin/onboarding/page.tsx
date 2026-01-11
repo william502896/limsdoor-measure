@@ -2,7 +2,8 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { createSupabaseBrowser } from "@/app/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { PLATFORM_NAME } from "@/app/lib/constants";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AddressSearchModal from "@/app/components/AddressSearchModal";
 import { useDemoLimit } from "@/app/hooks/useDemoLimit";
@@ -11,6 +12,8 @@ type PersonRow = { name: string; phone?: string; note?: string };
 
 export default function AdminOnboardingPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const mode = searchParams.get("mode");
 
     // Safety Force: Handle missing Env Vars gracefully
     const supabase = useMemo(() => {
@@ -27,33 +30,51 @@ export default function AdminOnboardingPage() {
     const [err, setErr] = useState<string | null>(null);
 
     // --- Configuration Error View ---
-    if (!supabase) {
+    const clientUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const EXPECTED_DB_ID = "eicaihbfdblvzertjjuu"; // Server-side DB from error logs
+
+    // Check 1: Missing Env Vars
+    if (!supabase || !clientUrl) {
         return (
             <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
                 <div className="bg-white text-red-600 p-8 rounded-2xl max-w-lg text-center shadow-2xl border border-red-100">
-                    <h2 className="text-2xl font-black mb-4">⚙️ Configuration Error</h2>
-                    <p className="text-base mb-8 text-slate-600">
-                        Supabase connection failed. Below is the current environment status.
-                    </p>
+                    <h2 className="text-2xl font-black mb-4">⚙️ Environmental Config Missing</h2>
+                    <p>NEXT_PUBLIC_SUPABASE_URL is missing in the browser.</p>
+                </div>
+            </div>
+        );
+    }
 
-                    <div className="bg-slate-50 p-6 rounded-xl text-left text-sm font-mono mb-8 border border-slate-200">
-                        <div className="flex justify-between mb-2">
-                            <span className="font-bold text-slate-500">URL:</span>
-                            <span className={process.env.NEXT_PUBLIC_SUPABASE_URL ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
-                                {process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Loaded" : "❌ Missing"}
-                            </span>
+    // Check 2: Environment Mismatch (Client vs Server)
+    if (!clientUrl.includes(EXPECTED_DB_ID)) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+                <div className="bg-slate-800 p-8 rounded-3xl max-w-2xl text-center shadow-2xl border border-red-500/50">
+                    <h2 className="text-3xl font-black mb-6 text-red-400">⚠️ Database Mismatch Detected</h2>
+
+                    <div className="bg-slate-950 p-6 rounded-xl text-left font-mono text-sm mb-6 space-y-4 border border-slate-700">
+                        <div>
+                            <div className="text-slate-500 mb-1">Server (Correct):</div>
+                            <div className="text-green-400 font-bold">{EXPECTED_DB_ID}</div>
                         </div>
-                        <div className="flex justify-between">
-                            <span className="font-bold text-slate-500">ANON_KEY:</span>
-                            <span className={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
-                                {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✅ Loaded" : "❌ Missing"}
-                            </span>
+                        <div className="border-t border-slate-800 pt-4">
+                            <div className="text-slate-500 mb-1">Your Client (Incorrect):</div>
+                            <div className="text-red-400 font-bold break-all">{clientUrl}</div>
                         </div>
                     </div>
 
-                    <p className="text-sm text-slate-500">
-                        If you added variables to Vercel, please <strong className="text-indigo-600">Redeploy</strong> to apply them.
+                    <p className="text-slate-300 mb-8 leading-relaxed">
+                        The Vercel <strong>Production</strong> environment variables are pointing to the wrong database.<br /><br />
+                        Please go to Vercel Settings &rarr; Environment Variables and ensure<br />
+                        <code>NEXT_PUBLIC_SUPABASE_URL</code> is set to the Server's URL for the <strong>Production</strong> environment.
                     </p>
+
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-colors"
+                    >
+                        Redeploy & Reload
+                    </button>
                 </div>
             </div>
         );
@@ -118,13 +139,15 @@ export default function AdminOnboardingPage() {
             const { data: { user } } = await supabase!.auth.getUser();
             if (user) {
                 const { data: profile } = await supabase!.from("프로필").select("company_id").eq("id", user.id).single();
-                if (profile?.company_id) {
+
+                // If company exists BUT mode is 'edit', allow access (bypass "Already Registered" screen)
+                if (profile?.company_id && mode !== 'edit') {
                     setRegisteredCompany({ name: "등록된 회사", logo: "" });
                 }
             }
         }
         checkStatus();
-    }, [supabase]);
+    }, [supabase, mode]);
 
     // --- Actions ---
     function handlePreview() {
@@ -262,96 +285,85 @@ export default function AdminOnboardingPage() {
         setLoading(true);
         setErr(null);
         try {
-            // Validate Master Password
-            if (masterPassword.length < 4) {
-                if (masterPassword !== "0000" && masterPassword.length < 6) {
-                    throw new Error("1티어 관리자 비밀번호는 기본값(0000) 또는 6자리 이상으로 설정해야 합니다.");
-                }
+            // Validate Master Password (Supabase Auth requires min 6 chars)
+            if (masterPassword.length < 6) {
+                throw new Error("보안을 위해 비밀번호는 최소 6자리 이상이어야 합니다.");
             }
-            if (masterPassword.length === 0) throw new Error("1티어 관리자 비밀번호를 입력해주세요.");
 
             if (!businessNumber.trim() || !companyName.trim() || !ownerName.trim()) {
                 throw new Error("필수 항목(사업자번호/회사명/대표자명)을 입력해주세요.");
             }
 
-            // 1. Check Auth (Sign Up if needed)
-            const { data: authData } = await supabase.auth.getUser();
-            let user = authData.user;
-
-            if (!user) {
-                // Not logged in -> Attempt Sign Up / Sign In
-                if (!email.trim()) throw new Error("로그인되어 있지 않습니다. 이메일을 입력하여 회원가입을 진행해주세요.");
-
-                // Try Sign Up
-                const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-                    email: email.trim(),
-                    password: masterPassword, // Use Master Password as Account Password
-                    options: {
-                        data: {
-                            full_name: ownerName,
-                        }
-                    }
-                });
-
-                if (signUpErr) {
-                    // Try Sign In if Sign Up failed (maybe existing user)
-                    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-                        email: email.trim(),
-                        password: masterPassword
-                    });
-                    if (signInErr) {
-                        // Original signup error is more relevant usually
-                        throw new Error(`회원가입/로그인 실패: ${signUpErr.message}`);
-                    }
-                    user = signInData.user;
-                } else {
-                    user = signUpData.user;
-                }
-            }
-
-            if (!user) throw new Error("사용자 인증에 실패했습니다.");
-
             // Filter empty URLs
             const validHomepages = homepages.map(u => u.trim()).filter(u => u.length > 0);
             const validMalls = mallUrls.map(u => u.trim()).filter(u => u.length > 0);
 
+            // 1. Prepare Body (Delegating User Creation to Server)
+            // We pass 'email' and 'master_password' so server can create the Auth User safely.
+            const body = {
+                // owner_user_id: user.id, // REMOVED: Server will generate this
+
+                business_number: businessNumber.trim(),
+                company_name: companyName.trim(),
+                address: address.trim() || undefined,
+                email: email.trim() || undefined,
+                fax: fax.trim() || undefined,
+                kakao: kakao.trim() || undefined,
+                logo_url: logoUrl || undefined,
+                homepage_urls: validHomepages.length > 0 ? validHomepages : undefined,
+                shopping_mall_urls: validMalls.length > 0 ? validMalls : undefined,
+                youtube: youtube.trim() || undefined,
+                tiktok: tiktok.trim() || undefined,
+                instagram: instagram.trim() || undefined,
+                facebook: facebook.trim() || undefined,
+
+                owner_name: ownerName.trim(),
+                owner_job_title: ownerJobTitle.trim() || undefined,
+                owner_phone: ownerPhone.trim() || undefined,
+
+                master_password: masterPassword, // Server uses this for both Company & Auth User
+
+                measurers: measurers,
+                installers: installers
+            };
+
+            // 2. API Call (Server Creates User + Company + Profile)
             const res = await fetch("/api/admin/onboarding", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    owner_user_id: user.id,
-                    business_number: businessNumber.trim(),
-                    company_name: companyName.trim(),
-                    address: address.trim() || undefined,
-                    email: email.trim() || undefined,
-                    fax: fax.trim() || undefined,
-                    kakao: kakao.trim() || undefined,
-                    youtube: youtube.trim() || undefined,
-                    tiktok: tiktok.trim() || undefined,
-                    instagram: instagram.trim() || undefined,
-                    facebook: facebook.trim() || undefined,
-                    logo_url: logoUrl || undefined,
-                    homepage_urls: validHomepages.length > 0 ? validHomepages : undefined,
-                    shopping_mall_urls: validMalls.length > 0 ? validMalls : undefined,
-                    owner_name: ownerName.trim(),
-                    owner_job_title: ownerJobTitle.trim() || undefined,
-                    owner_phone: ownerPhone.trim() || undefined,
-                    master_password: masterPassword,
-                    measurers,
-                    installers,
-                }),
+                body: JSON.stringify(body),
             });
 
             const json = await res.json();
-            if (!res.ok || !json.ok) throw new Error(json.error || "ONBOARDING_FAILED");
 
-            router.replace("/admin");
-            router.refresh();
+            if (!res.ok || !json.ok) {
+                // Handle specific error cases
+                throw new Error(json.error || "등록 중 오류가 발생했습니다.");
+            }
+
+            // 3. Success -> Auto Login
+            // Since account is created, valid, and confirmed (by Admin API), we can sign in.
+            const { error: signInErr } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password: masterPassword
+            });
+
+            if (signInErr) {
+                alert("등록은 성공했으나, 자동 로그인에 실패했습니다. 수동으로 로그인해주세요.");
+                window.location.href = "/login"; // Or standard login page
+            } else {
+                alert("✅ 등록이 완료되었습니다! 통합 관제 시스템으로 이동합니다.");
+                setIsRedirecting(true);
+                setTimeout(() => {
+                    window.location.href = "/manage"; // Redirect to Integrated Control (Manage Hub)
+                }, 1000);
+            }
         } catch (e: any) {
             console.error(e);
             setErr(e?.message || "등록 실패");
+            setLoading(false); // Stop loading only on error
         } finally {
-            setLoading(false);
+            // setLoading(false); // Valid success keeps loading/redirecting
         }
     }
 
@@ -367,7 +379,7 @@ export default function AdminOnboardingPage() {
                 <div className="mb-12 text-center relative">
                     <Link href="/admin/onboarding" className="inline-block group cursor-pointer">
                         <h1 className="text-4xl md:text-5xl font-black text-slate-800 tracking-tighter mb-3 group-hover:text-indigo-600 transition-colors drop-shadow-sm">
-                            LIMSDOOR ADMIN
+                            {PLATFORM_NAME} ADMIN
                         </h1>
                         <p className="text-lg text-slate-600 font-medium group-hover:text-indigo-500 transition-colors">
                             사용 등록을 통해 관리자 기능을 시작하세요.
@@ -392,6 +404,9 @@ export default function AdminOnboardingPage() {
                             />
                         </button>
                         <span className="text-[10px] font-bold mt-1 text-slate-400 uppercase tracking-widest">Dev Mode</span>
+                        <div className="mt-2 text-[8px] text-slate-300 font-mono">
+                            DB: {process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')[0].replace('https://', '')}
+                        </div>
                     </div>
                 </div>
 
@@ -542,7 +557,7 @@ export default function AdminOnboardingPage() {
                                         <Field label="이메일" value={email} onChange={setEmail} placeholder="견적/명세서 발송용" />
                                         <Field label="팩스" value={fax} onChange={setFax} placeholder="선택" />
                                         <Field label="카톡 (채널 링크/ID)" value={kakao} onChange={setKakao} placeholder="예: http://pf.kakao.com/..." />
-                                        <Field label="1티어 관리자 비밀번호" value={masterPassword} onChange={setMasterPassword} placeholder="6자리 이상 (기본: 0000)" type="password" />
+                                        <Field label="1티어 관리자 비밀번호" value={masterPassword} onChange={setMasterPassword} placeholder="6자리 이상 입력 (필수)" type="password" />
                                     </div>
 
                                     {/* URLs */}

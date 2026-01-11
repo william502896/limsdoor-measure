@@ -1,17 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const supabaseAdmin = () => {
+export function supabaseAdmin() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is required");
+    if (!service) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required");
 
-    if (!url || !serviceRoleKey) {
-        throw new Error("Missing Supabase URL or Service Role Key");
-    }
-
-    return createClient(url, serviceRoleKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-        },
+    return createClient(url, service, {
+        auth: { persistSession: false },
     });
-};
+}

@@ -18,7 +18,6 @@ type PaymentRow = {
 function formatKST(iso?: string | null) {
     if (!iso) return "-";
     const d = new Date(iso);
-    // KST 표시
     return new Intl.DateTimeFormat("ko-KR", {
         timeZone: "Asia/Seoul",
         year: "numeric",
@@ -40,23 +39,64 @@ async function adminAction(paymentId: string, action: string) {
 }
 
 export default async function AdminPaymentsPage() {
-    const supabase = supabaseServer();
-    const { data, error } = await supabase
-        .from("payments")
-        .select("id, estimate_id, customer_name, customer_phone, pay_type, amount, status, payhere_link_url, expire_at, created_at")
-        .order("created_at", { ascending: false })
-        .limit(200);
+    const sb = await supabaseServer();
 
-    if (error) {
+    // 1) 로그인 유저 확인 (서버 세션)
+    const { data: auth, error: authErr } = await sb.auth.getUser();
+    if (authErr || !auth?.user) {
         return (
             <div style={{ padding: 16 }}>
                 <h1>결제 관리</h1>
-                <pre>{error.message}</pre>
+                <pre>로그인이 필요합니다. (auth 세션 없음)</pre>
             </div>
         );
     }
 
-    const rows = (data ?? []) as PaymentRow[];
+    // 2) 내 profiles에서 company_id 조회 (RLS: 본인 row만 허용)
+    const { data: profile, error: pErr } = await sb
+        .from("profiles")
+        .select("company_id, role")
+        .eq("id", auth.user.id)
+        .single();
+
+    if (pErr) {
+        return (
+            <div style={{ padding: 16 }}>
+                <h1>결제 관리</h1>
+                <pre>{`profiles 조회 실패: ${pErr.message}`}</pre>
+            </div>
+        );
+    }
+
+    if (!profile?.company_id) {
+        return (
+            <div style={{ padding: 16 }}>
+                <h1>결제 관리</h1>
+                <pre>
+                    company_id가 비어 있습니다.{"\n"}
+                    → 온보딩에서 회사 생성 후 profiles.company_id 연결이 먼저 필요합니다.
+                </pre>
+            </div>
+        );
+    }
+
+    // 3) payments를 내 회사(company_id) 기준으로 조회
+    const { data: rows, error: payErr } = await sb
+        .from("payments")
+        .select("id, estimate_id, customer_name, customer_phone, pay_type, amount, status, payhere_link_url, expire_at, created_at")
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false });
+
+    if (payErr) {
+        return (
+            <div style={{ padding: 16 }}>
+                <h1>결제 관리</h1>
+                <pre>{`payments 조회 실패: ${payErr.message}`}</pre>
+            </div>
+        );
+    }
+
+    const safeRows: PaymentRow[] = (rows ?? []) as any;
 
     return (
         <div style={{ padding: 16 }}>
@@ -77,7 +117,7 @@ export default async function AdminPaymentsPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((r) => (
+                        {safeRows.map((r) => (
                             <tr key={r.id}>
                                 <td style={{ borderBottom: "1px solid #eee", padding: "10px 8px", fontWeight: 600 }}>{r.status}</td>
                                 <td style={{ borderBottom: "1px solid #eee", padding: "10px 8px" }}>{r.estimate_id}</td>
@@ -116,10 +156,11 @@ export default async function AdminPaymentsPage() {
                                 </td>
                             </tr>
                         ))}
-                        {rows.length === 0 && (
+
+                        {safeRows.length === 0 && (
                             <tr>
                                 <td colSpan={8} style={{ padding: 20, opacity: 0.7 }}>
-                                    결제요청이 없습니다.
+                                    결제요청이 없습니다. (또는 payments에 company_id가 아직 채워지지 않았습니다)
                                 </td>
                             </tr>
                         )}

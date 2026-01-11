@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { GitBranch, Clock, Send, Power } from "lucide-react";
 
-export default function ScenariosPage() {
+import { Suspense } from "react";
+
+function ScenariosContent() {
     const searchParams = useSearchParams();
     const adminKey = searchParams.get("key") || "";
     const [list, setList] = useState<any[]>([]);
@@ -75,5 +77,13 @@ export default function ScenariosPage() {
                 ))}
             </div>
         </div>
+    );
+}
+
+export default function ScenariosPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Loading Scenarios...</div>}>
+            <ScenariosContent />
+        </Suspense>
     );
 }

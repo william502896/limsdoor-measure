@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Download, ChevronRight, CheckCircle2, User, Phone } from "lucide-react";
+import { PLATFORM_NAME } from "@/app/lib/constants";
 
 export default function LandingPagePublic() {
     const params = useParams();
@@ -91,7 +92,7 @@ export default function LandingPagePublic() {
                         <img src={landing.main_image_url} alt="Hero" className="w-full h-full object-cover" />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center bg-indigo-50 text-indigo-300">
-                            <span className="font-bold text-2xl">LimsDoor</span>
+                            <span className="font-bold text-2xl">{PLATFORM_NAME}</span>
                         </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
@@ -190,7 +191,7 @@ export default function LandingPagePublic() {
 
                 {/* Footer */}
                 <div className="px-6 py-6 text-center">
-                    <p className="text-xs text-slate-400 font-medium">© LimsDoor Corp. All rights reserved.</p>
+                    <p className="text-xs text-slate-400 font-medium">© {PLATFORM_NAME} Corp. All rights reserved.</p>
                 </div>
             </main>
         </div>

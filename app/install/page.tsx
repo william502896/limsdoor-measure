@@ -14,6 +14,7 @@ import { ko } from "date-fns/locale";
 import { useRouter } from "next/navigation";
 import DemoGuard from "@/app/components/DemoGuard";
 import { useDemoLimit } from "@/app/hooks/useDemoLimit";
+import { PLATFORM_NAME } from "@/app/lib/constants";
 
 // --- AR Visual Constants ---
 const FRAME_COLORS: any = {
@@ -811,7 +812,7 @@ export default function InstallPage() {
                             <div>
                                 <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">
                                     {user?.name || "시공자님"}
-                                    <span className="text-indigo-600 block text-xs font-medium mt-0.5">LIMSDOOR INSTALLER</span>
+                                    <span className="text-indigo-600 block text-xs font-medium mt-0.5">{PLATFORM_NAME} INSTALLER</span>
                                 </h1>
                             </div>
                         </div>

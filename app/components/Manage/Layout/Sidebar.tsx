@@ -95,7 +95,10 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
             const idleTime = Date.now() - lastActivityRef.current;
             if (idleTime > 3 * 60 * 1000) {
                 try {
-                    await fetch("/api/admin/tier1/logout", { method: "POST" });
+                    // Logout logic
+                    document.cookie = "super_admin_verified=; path=/; max-age=0";
+                    document.cookie = "super_admin_otp_verified=; path=/; max-age=0";
+                    document.cookie = "tier1_ui=; path=/; max-age=0";
                     setIsTier1(false);
                     window.dispatchEvent(new Event("tier1-login"));
                 } catch (e) {
@@ -114,6 +117,10 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
     };
 
     const MARKETING_ITEMS = [
+        { id: "results", label: "마케팅 리포트", icon: FileText, href: "/admin/marketing" },
+        { id: "secret", label: "시크릿 자료실", icon: Lock, href: "/admin/secure/secret" },
+        { id: "generate", label: "자동 생성기", icon: Mic, href: "/marketing/generate" },
+
         { id: "landings", label: "랜딩 제작", icon: Layout, href: "/admin/marketing/landings" },
         { id: "leads", label: "리드 점수", icon: BarChart3, href: "/admin/marketing/leads" },
         { id: "scenarios", label: "자동 시나리오", icon: GitBranch, href: "/admin/marketing/scenarios" },
@@ -141,8 +148,11 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
     const MENU_ITEMS = [
         { id: "dashboard", label: "대시보드", icon: LayoutDashboard, href: "/manage?view=dashboard" },
-        // Marketing will be inserted here manually
-        // Schedule will be inserted here manually
+        { id: "company_settings", label: "회사 설정", icon: Settings, href: "/admin/settings" }, // NEW
+        { id: "secret", label: "시크릿 자료실", icon: Lock, href: "/admin/secure/secret" },
+        { id: "marketing_results", label: "마케팅 리포트", icon: FileText, href: "/admin/marketing" },
+        // Marketing Folder will be below
+        // Schedule Folder will be below
         { id: "contract", label: "견적 / 결제", icon: FileText, href: "/manage?view=contract" },
         { id: "construction", label: "시공 관리", icon: Hammer, href: "/manage?view=construction" },
         { id: "retention", label: "후기 / 재구매", icon: Star, href: "/manage?view=retention" },
@@ -164,12 +174,12 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
     // Tier 1 (Super Admin) Group
     const TIER1_ITEMS = [
-        { id: "vendors", label: "거래처 관리", icon: Building2, href: "/admin/partners" },
+        { id: "vendors", label: "거래처 관리", icon: Building2, href: "/admin/secure/partners" },
         { id: "pricing", label: "단가 관리", icon: Coins, href: "/admin/purchase-costs" },
-        { id: "materials", label: "품목/자재", icon: Package, href: "/admin/items" },
+        { id: "materials", label: "품목/자재", icon: Package, href: "/admin/secure/items" },
         { id: "margins", label: "단가/마진", icon: Banknote, href: "/admin/prices" },
-        { id: "statement", label: "전자 명세서", icon: Receipt, href: "/admin/invoices" },
-        { id: "design", label: "UI 디자인", icon: Palette, href: "/admin/design" },
+        { id: "statement", label: "전자 명세서", icon: Receipt, href: "/admin/secure/invoices" },
+        { id: "design", label: "UI 디자인", icon: Palette, href: "/admin/secure/design" },
     ];
 
     return (
@@ -236,20 +246,23 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
             {/* Menu */}
             <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
-                <div className={`px-2 mb-6 ${collapsed ? 'text-center' : ''}`}>
-                    <Link
-                        href="/admin/onboarding"
-                        className={`
-                            flex items-center gap-2 w-full rounded-xl font-bold transition-all duration-200 shadow-[0_4px_12px_rgba(99,102,241,0.3)] animate-pulse
-                            bg-gradient-to-br from-indigo-500 to-purple-600 text-white hover:shadow-indigo-500/50 hover:scale-[1.02]
-                            ${collapsed ? "justify-center p-3" : "px-3 py-3"}
-                        `}
-                        title="사용 등록하기"
-                    >
-                        <span className="text-lg">🚀</span>
-                        {!collapsed && <span className="text-sm">사용 등록하기</span>}
-                    </Link>
-                </div>
+                {/* [FEATURE FLAG] Registration UI Hiding */}
+                {process.env.NEXT_PUBLIC_FEATURE_USER_REGISTRATION === 'true' && (
+                    <div className={`px-2 mb-6 ${collapsed ? 'text-center' : ''}`}>
+                        <Link
+                            href="/admin/onboarding"
+                            className={`
+                                flex items-center gap-2 w-full rounded-xl font-bold transition-all duration-200 shadow-[0_4px_12px_rgba(99,102,241,0.3)] animate-pulse
+                                bg-gradient-to-br from-indigo-500 to-purple-600 text-white hover:shadow-indigo-500/50 hover:scale-[1.02]
+                                ${collapsed ? "justify-center p-3" : "px-3 py-3"}
+                            `}
+                            title="사용 등록하기"
+                        >
+                            <span className="text-lg">🚀</span>
+                            {!collapsed && <span className="text-sm">사용 등록하기</span>}
+                        </Link>
+                    </div>
+                )}
 
                 {!collapsed && <div className="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Main Menu</div>}
                 <ul className="space-y-1 px-2 mb-6">
@@ -453,7 +466,10 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
                                 <button
                                     onClick={async (e) => {
                                         e.stopPropagation();
-                                        await fetch("/api/admin/tier1/logout", { method: "POST" });
+                                        // Logout logic
+                                        document.cookie = "super_admin_verified=; path=/; max-age=0";
+                                        document.cookie = "super_admin_otp_verified=; path=/; max-age=0";
+                                        document.cookie = "tier1_ui=; path=/; max-age=0";
                                         setIsTier1(false);
                                         window.dispatchEvent(new Event("tier1-login"));
                                         window.location.reload(); // Force Reload
@@ -515,7 +531,7 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
 
             {/* Footer */}
             <div className="p-4 border-t border-slate-800 space-y-2">
-                <Link href="/field/new" className={`flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-indigo-900/50 ${collapsed ? "justify-center px-0" : ""}`}>
+                <Link href="/measure" className={`flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-indigo-900/50 ${collapsed ? "justify-center px-0" : ""}`}>
                     <span className="text-lg">📏</span>
                     {!collapsed && <span>현장 실측</span>}
                 </Link>
@@ -523,7 +539,10 @@ function SidebarContent({ collapsed = false, mobile = false, onClose }: SidebarP
                     <button
                         onClick={async () => {
                             // Clear Tier 1
-                            await fetch("/api/admin/tier1/logout", { method: "POST" });
+                            // Clear Tier 1
+                            document.cookie = "super_admin_verified=; path=/; max-age=0";
+                            document.cookie = "super_admin_otp_verified=; path=/; max-age=0";
+                            document.cookie = "tier1_ui=; path=/; max-age=0";
                             // Clear Supabase (Client Side) - Assuming standard supabase client usage somewhere, or redirect
                             // For now, triggering Tier 1 Logout and redirecting to login
                             setIsTier1(false);

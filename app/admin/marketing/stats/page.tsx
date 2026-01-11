@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sparkles, TrendingUp, AlertTriangle, ArrowRight, BarChart2, PieChart } from "lucide-react";
 
-export default function MarketingStatsPage() {
+import { Suspense } from "react";
+
+function MarketingStatsContent() {
     const searchParams = useSearchParams();
     const adminKey = searchParams.get("key") || "";
     const [data, setData] = useState<any>(null);
@@ -115,5 +117,13 @@ export default function MarketingStatsPage() {
                 </table>
             </div>
         </div>
+    );
+}
+
+export default function MarketingStatsPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center bg-slate-50 min-h-screen">Loading Stats...</div>}>
+            <MarketingStatsContent />
+        </Suspense>
     );
 }

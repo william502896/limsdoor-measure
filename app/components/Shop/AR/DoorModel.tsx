@@ -1,42 +1,51 @@
 import React from "react";
+import { DoorStructure, FrameColor, GlassType } from "@/app/lib/doorCatalog";
 
 // --- Types ---
-export type DoorType = "원슬라이딩" | "3연동" | "스윙" | "여닫이" | "파티션"; // Partition added
-export type FrameColor = "화이트" | "블랙" | "샴페인골드" | "네이비";
-export type GlassType = "투명" | "브론즈" | "워터큐브" | "미스트";
+// "DoorType" in this component is essentially "DoorStructure"
+// We alias it or use it directly.
 
 interface DoorModelProps {
-    type: DoorType;
-    frameColor: FrameColor;
-    glassType: GlassType;
+    type: DoorStructure | string; // Allow string to support legacy/mismatch safe fallback
+    frameColor: FrameColor | string;
+    glassType: GlassType | string;
     width: number; // width in mm (visual)
     height: number; // height in mm (visual)
     isOpen?: boolean; // New prop for simulation
 }
 
 // --- Style Maps ---
-const FRAME_HEX: Record<FrameColor, string> = {
+const FRAME_HEX: Record<string, string> = {
     "화이트": "#f3f4f6",
     "블랙": "#1f2937",
-    "샴페인골드": "#d4af37",
-    "네이비": "#1e3a8a"
+    "골드": "#d4af37", // Canonical Name
+    "샴페인골드": "#d4af37", // Legacy Fallback
+    "그레이": "#666666", // Added from Catalog
+    "네이비": "#1e3a8a" // Legacy, keep just in case but usually not reachable
 };
 
-const GLASS_STYLES: Record<GlassType, React.CSSProperties> = {
+// Map Catalog Glass Types to styles. 
+// Fallback to "투명" style for unknown types.
+const GLASS_STYLES: Record<string, React.CSSProperties> = {
     "투명": { background: "rgba(255, 255, 255, 0.15)", backdropFilter: "blur(0px)" },
-    "브론즈": { background: "rgba(120, 80, 40, 0.3)", backdropFilter: "blur(0px)" }, // Bronze tint
-    "워터큐브": {
+    "브론즈": { background: "rgba(120, 80, 40, 0.3)", backdropFilter: "blur(0px)" },
+    "다크그레이": { background: "rgba(30, 30, 30, 0.5)", backdropFilter: "blur(0px)" },
+    "샤틴": { background: "rgba(255, 255, 255, 0.6)", backdropFilter: "blur(4px)" },
+    "아쿠아": {
         background: "rgba(200, 230, 255, 0.4)",
         backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.4) 2px, transparent 1px)",
         backgroundSize: "20px 20px",
         backdropFilter: "blur(4px)"
     },
-    "미스트": { background: "rgba(255, 255, 255, 0.6)", backdropFilter: "blur(12px)" }
+    "미스트": { background: "rgba(255, 255, 255, 0.6)", backdropFilter: "blur(12px)" },
+    // Defaults for others
+    "default": { background: "rgba(255, 255, 255, 0.3)", backdropFilter: "blur(2px)" }
 };
 
 export default function DoorModel({ type, frameColor, glassType, width, height, isOpen = false }: DoorModelProps) {
-    const colorHex = FRAME_HEX[frameColor];
-    const glassStyle = GLASS_STYLES[glassType];
+    const colorHex = FRAME_HEX[frameColor] || FRAME_HEX["블랙"];
+    const glassStyle = GLASS_STYLES[glassType] || GLASS_STYLES["default"];
+
 
     // Common Transition
     const transitionStyle: React.CSSProperties = {
@@ -143,11 +152,11 @@ export default function DoorModel({ type, frameColor, glassType, width, height, 
     }
 
     /**
-     * Swing Door (스윙/여닫이)
+     * Swing Door (스윙도어)
      * - Handle
      * - Hinge
      */
-    if (type === "스윙" || type === "여닫이") {
+    if (type === "스윙도어" || type === "스윙" || type === "여닫이") {
         return (
             <div className="relative w-full h-full pointer-events-none p-2" >
                 {/* Outer Frame */}

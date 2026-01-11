@@ -8,7 +8,9 @@ import { supabase } from "@/app/lib/supabase";
 
 type LandingMode = "LEAD" | "CONSULT" | "CLOSE";
 
-export default function CreateLandingPage() {
+import { Suspense } from "react";
+
+function CreateLandingContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const adminKey = searchParams.get("key") || "";
@@ -582,5 +584,13 @@ export default function CreateLandingPage() {
 
             </div>
         </div>
+    );
+}
+
+export default function CreateLandingPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Loading Generator...</div>}>
+            <CreateLandingContent />
+        </Suspense>
     );
 }

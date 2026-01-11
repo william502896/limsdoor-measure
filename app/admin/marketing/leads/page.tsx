@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Flame, ThermometerSun, ThermometerSnowflake, PhoneCall, MessageSquare, Clock } from "lucide-react";
 
-export default function LeadScoringPage() {
+import { Suspense } from "react";
+
+function LeadScoringContent() {
     const searchParams = useSearchParams();
     const adminKey = searchParams.get("key") || "";
     const [list, setList] = useState<any[]>([]);
@@ -106,5 +108,13 @@ export default function LeadScoringPage() {
                 </table>
             </div>
         </div>
+    );
+}
+
+export default function LeadScoringPage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center bg-slate-50 min-h-screen">Loading Leads...</div>}>
+            <LeadScoringContent />
+        </Suspense>
     );
 }

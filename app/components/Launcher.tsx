@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import {
     LayoutDashboard,
@@ -17,6 +17,29 @@ import { useGlobalStore } from '../lib/store-context';
 
 export default function Launcher() {
     const { settings } = useGlobalStore();
+    const [portfolioUrl, setPortfolioUrl] = React.useState<string>('/portfolio');
+    const [googlePhotosUrl, setGooglePhotosUrl] = React.useState<string>('');
+
+    useEffect(() => {
+        // Fetch real portfolio URL
+        async function fetchPortfolio() {
+            try {
+                const res = await fetch("/api/company/settings");
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.data?.portfolio_url) {
+                        setPortfolioUrl(json.data.portfolio_url);
+                    }
+                    if (json.data?.google_photos_url) {
+                        setGooglePhotosUrl(json.data.google_photos_url);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch portfolio settings", e);
+            }
+        }
+        fetchPortfolio();
+    }, []);
 
     // Guard against hydration mismatch or undefined settings
     if (!settings) return null;
@@ -69,10 +92,20 @@ export default function Launcher() {
             title: '포트폴리오',
             desc: '시공 사례 · 사진 · 후기 정리',
             icon: ImageIcon,
-            href: '/portfolio',
+            href: portfolioUrl,
             color: 'bg-pink-600',
             bg: 'bg-pink-50',
             text: 'text-pink-600'
+        },
+        {
+            id: 'google_photos',
+            title: '구글 사진첩',
+            desc: '현장 시공 사진 아카이브',
+            icon: ImageIcon,
+            href: googlePhotosUrl || '#',
+            color: 'bg-blue-600',
+            bg: 'bg-blue-50',
+            text: 'text-blue-600'
         }
     ];
 
@@ -124,6 +157,7 @@ export default function Launcher() {
                         return (
                             <Link
                                 href={m.href}
+                                target={m.id === 'portfolio' || m.id === 'google_photos' ? '_blank' : undefined}
                                 key={m.id}
                                 className={`group relative bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col justify-between 
                                     ${homeLayout.cardSize === 'large' ? 'min-h-[200px]' : 'min-h-[160px]'}`}

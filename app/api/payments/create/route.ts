@@ -35,28 +35,22 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: false, error: "amount must be > 0" }, { status: 400 });
         }
 
-        const supabase = supabaseServer();
+        const { insertWithCompany } = await import("@/app/lib/companyDb");
 
-        const { data, error } = await supabase
-            .from("payments")
-            .insert({
-                estimate_id: estimateId,
-                customer_name: customerName,
-                customer_phone: customerPhone,
-                method,
-                pay_type: payType,
-                amount,
-                status: "CREATED",
-                expire_at: endOfTodayKST(),
-                memo,
-                lead_id: leadId,
-            })
-            .select("*")
-            .single();
+        const payment = await insertWithCompany("payments", {
+            estimate_id: estimateId,
+            customer_name: customerName,
+            customer_phone: customerPhone,
+            method,
+            pay_type: payType,
+            amount,
+            status: "CREATED",
+            expire_at: endOfTodayKST(),
+            memo,
+            lead_id: leadId,
+        });
 
-        if (error) throw error;
-
-        return NextResponse.json({ ok: true, payment: data });
+        return NextResponse.json({ ok: true, payment });
     } catch (e: any) {
         return NextResponse.json({ ok: false, error: e?.message ?? "unknown error" }, { status: 500 });
     }

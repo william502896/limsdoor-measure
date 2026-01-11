@@ -12,17 +12,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: false, error: "valid linkUrl required" }, { status: 400 });
         }
 
-        const supabase = supabaseServer();
-        const { data, error } = await supabase
-            .from("payments")
-            .update({ payhere_link_url: linkUrl, status: "LINK_SENT" })
-            .eq("id", paymentId)
-            .select("*")
-            .single();
+        const { updateWithCompany } = await import("@/app/lib/companyDb");
 
-        if (error) throw error;
+        const payment = await updateWithCompany(
+            "payments",
+            { payhere_link_url: linkUrl, status: "LINK_SENT" },
+            { id: paymentId }
+        );
 
-        return NextResponse.json({ ok: true, payment: data });
+        return NextResponse.json({ ok: true, payment });
     } catch (e: any) {
         return NextResponse.json({ ok: false, error: e?.message ?? "unknown error" }, { status: 500 });
     }

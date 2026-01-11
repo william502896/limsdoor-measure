@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useGlobalStore } from "./lib/store-context";
+import { PLATFORM_NAME } from "@/app/lib/constants";
 
 export default function RootRedirector() {
   const { user, loaded, login } = useGlobalStore();
@@ -25,13 +26,13 @@ export default function RootRedirector() {
     if (role === "OWNER" || role === "ADMIN" || role === "OFFICE") {
       router.replace("/admin");
     } else if (role === "MEASURER") {
-      router.replace("/field/new");
+      router.replace("/measure");
     } else if (role === "INSTALLER") {
       router.replace("/install");
     } else if (role === "CONSUMER") {
-      router.replace("/shop");
+      router.replace("/consumer");
     } else {
-      router.replace("/shop"); // Default fallback
+      router.replace("/consumer"); // Default fallback
     }
 
   }, [user, loaded, router]);
@@ -42,7 +43,7 @@ export default function RootRedirector() {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6">
         {/* Demo Login Selector */}
-        <h1 className="text-3xl font-bold mb-8">LIMSDOOR Platform</h1>
+        <h1 className="text-3xl font-bold mb-8">{PLATFORM_NAME} Platform</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
           <button onClick={() => login("u_master")} className="p-4 bg-indigo-600 rounded-xl hover:bg-indigo-500 font-bold">
             관리자 (Admin App)
@@ -54,7 +55,7 @@ export default function RootRedirector() {
             시공자 (Install App)
           </button>
           <button onClick={() => login("u_consumer")} className="p-4 bg-pink-600 rounded-xl hover:bg-pink-500 font-bold">
-            소비자 (Shop App)
+            소비자 (Consumer App)
           </button>
         </div>
 
