@@ -93,11 +93,99 @@ function speakKo(text: string) {
 
 // 📏 Deviation Helper
 function maxDiff(arr: number[]) {
-    const nums = arr.filter((n) => Number.isFinite(n) && n > 0);
+    const nums = (arr ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
     if (nums.length < 2) return 0;
-    const mn = Math.min(...nums);
-    const mx = Math.max(...nums);
-    return mx - mn;
+    return Math.max(...nums) - Math.min(...nums);
+}
+
+// ✅ Validation & Swap Rules
+type RangeRule = {
+    // 정상 범위(대략) - 오기 탐지용
+    minW: number; maxW: number;
+    minH: number; maxH: number;
+
+    // 기준값(참고) - 안내/스왑 판단에 도움
+    refW: number; refH: number;
+
+    // 메시지용 라벨
+    label: string;
+};
+
+function getDoorRangeRule(door: DoorKind): RangeRule {
+    switch (door) {
+        case "3T_MANUAL":
+            return { label: "수동 3연동", minW: 900, maxW: 2000, minH: 2000, maxH: 2600, refW: 1300, refH: 2300 };
+        case "AUTO":
+            return { label: "자동 3연동", minW: 900, maxW: 2000, minH: 2000, maxH: 2600, refW: 1300, refH: 2300 };
+        case "1W_SLIDING":
+            return { label: "원슬라이딩", minW: 800, maxW: 1800, minH: 2000, maxH: 2600, refW: 1200, refH: 2300 };
+        case "SWING_1":
+            return { label: "스윙 1도어", minW: 600, maxW: 1000, minH: 2000, maxH: 2600, refW: 850, refH: 2300 };
+        case "SWING_2":
+            return { label: "스윙 2도어", minW: 900, maxW: 1600, minH: 2000, maxH: 2600, refW: 1200, refH: 2300 };
+        case "HOPE_1":
+            return { label: "여닫이(호패) 1도어", minW: 600, maxW: 1000, minH: 2000, maxH: 2600, refW: 850, refH: 2300 };
+        case "HOPE_2":
+            return { label: "여닫이(호패) 2도어", minW: 900, maxW: 1600, minH: 2000, maxH: 2600, refW: 1200, refH: 2300 };
+        default:
+            return { label: "도어", minW: 600, maxW: 2500, minH: 1800, maxH: 2800, refW: 1200, refH: 2300 };
+    }
+}
+
+function isFinitePos(n: any) {
+    const x = Number(n);
+    return Number.isFinite(x) && x > 0;
+}
+
+function dist(a: number, b: number) {
+    return Math.abs(a - b);
+}
+
+type WHGuardResult = {
+    errors: string[];
+    warnings: string[];
+    suggestSwap: boolean;
+    // swap 했을 때 정상 범위에 더 가까워지는지
+    swapImproves: boolean;
+};
+
+function guardWidthHeight(door: DoorKind, widthMm: number, heightMm: number): WHGuardResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!isFinitePos(widthMm) || !isFinitePos(heightMm)) {
+        errors.push("가로/세로(mm)를 올바르게 입력해 주세요.");
+        return { errors, warnings, suggestSwap: false, swapImproves: false };
+    }
+
+    const w = Number(widthMm);
+    const h = Number(heightMm);
+
+    const rule = getDoorRangeRule(door);
+
+    // 1) 일반적 상식 체크: 높이가 너무 낮으면 오기 가능성 큼
+    if (h < 1800) warnings.push("세로가 1800mm 미만입니다. 가로/세로를 뒤집어 입력했을 가능성이 큽니다.");
+
+    // 2) 가로가 세로보다 크면 거의 오기
+    const suggestSwap = w > h;
+    if (suggestSwap) warnings.push("가로가 세로보다 큽니다. 가로/세로가 뒤바뀐 것 같습니다.");
+
+    // 3) 제품별 정상 범위 체크
+    const wOk = w >= rule.minW && w <= rule.maxW;
+    const hOk = h >= rule.minH && h <= rule.maxH;
+
+    if (!wOk) warnings.push(`${rule.label} 기준으로 가로(${w}mm)가 일반 범위를 벗어났습니다. (${rule.minW}~${rule.maxW}mm)`);
+    if (!hOk) warnings.push(`${rule.label} 기준으로 세로(${h}mm)가 일반 범위를 벗어났습니다. (${rule.minH}~${rule.maxH}mm)`);
+
+    // 4) swap이 실제로 더 "정상"에 가까운지 판단 (범위 + 기준값 거리)
+    const w2 = h;
+    const h2 = w;
+
+    // 기준값 거리 비교(작을수록 정상)
+    const score = (xw: number, xh: number) => dist(xw, rule.refW) + dist(xh, rule.refH) + (xw >= rule.minW && xw <= rule.maxW ? 0 : 5000) + (xh >= rule.minH && xh <= rule.maxH ? 0 : 5000);
+    const swapImproves = score(w2, h2) < score(w, h);
+
+    return { errors, warnings, suggestSwap, swapImproves };
 }
 
 export default function FieldNewPage() {
@@ -119,6 +207,9 @@ export default function FieldNewPage() {
 
     // ✅ Open Direction
     const [openDirection, setOpenDirection] = useState<OpenDirection>("LEFT_TO_RIGHT");
+
+    // TTS Debounce
+    const [lastSpokenKey, setLastSpokenKey] = useState<string>("");
 
     // Discount
     const [discountOpen, setDiscountOpen] = useState(false);
@@ -175,17 +266,28 @@ export default function FieldNewPage() {
     }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, measurerDiscountWon, promoDiscountWon]);
 
     // 🔊 TTS & Alert for Measurement Deviation
-    const wDiff = maxDiff((widthPoints ?? []).map((x: any) => Number(x)));
-    const hDiff = maxDiff((heightPoints ?? []).map((x: any) => Number(x)));
+    const wDiff = useMemo(() => maxDiff(widthPoints), [widthPoints]);
+    const hDiff = useMemo(() => maxDiff(heightPoints), [heightPoints]);
     const hasDiffWarn = wDiff >= 10 || hDiff >= 10;
 
+    // ✅ 오차 시 추가자재(마감재) 추천 + (3연동/원슬라이딩은 5만원 가능)
+    const needExtraMaterialRecommend = hasDiffWarn && (door === "3T_MANUAL" || door === "AUTO" || door === "1W_SLIDING");
+    const extraMaterialPossibleFee = needExtraMaterialRecommend ? 50000 : 0;
+
+    const extraMaterialMessage = needExtraMaterialRecommend
+        ? `실측 오차가 10mm 이상입니다. 마감재(추가자재) 사용이 필요할 수 있으며, 현장 상황에 따라 추가비용 ${extraMaterialPossibleFee.toLocaleString()}원이 발생할 수 있습니다.`
+        : `실측 오차가 10mm 이상입니다. 현장 상태에 따라 마감재(추가자재) 사용이 필요할 수 있습니다.`;
+
     useEffect(() => {
-        if (hasDiffWarn) {
-            const msg = `주의. 실측값 오차가 발생했습니다. 가로 오차 ${wDiff} 밀리, 세로 오차 ${hDiff} 밀리. ${EXTRA_MATERIAL_GUIDE}`;
-            console.warn(msg);
-            speakKo(msg);
-        }
-    }, [hasDiffWarn, wDiff, hDiff]);
+        if (!hasDiffWarn) return;
+
+        const key = `${door}-${wDiff}-${hDiff}-${needExtraMaterialRecommend ? "EXTRA50" : "EXTRA"}`;
+        if (key === lastSpokenKey) return;
+
+        const msg = `주의. 실측 오차가 발생했습니다. 가로 오차 ${wDiff} 밀리미터, 세로 오차 ${hDiff} 밀리미터. ${extraMaterialMessage}`;
+        speakKo(msg);
+        setLastSpokenKey(key);
+    }, [hasDiffWarn, wDiff, hDiff, door, needExtraMaterialRecommend, extraMaterialMessage, lastSpokenKey]);
 
     // 🔊 TTS & Block for Invalid Pricing
     useEffect(() => {
@@ -202,7 +304,8 @@ export default function FieldNewPage() {
 고객: ${customerName} (${customerPhone})
 제품: ${doorLabel(door)}
 실측: ${widthMm} × ${heightMm} (mm)
-
+열림방향: ${openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌"}
+${hasDiffWarn ? `\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDiff}mm\n${extraMaterialMessage}\n` : ""}
 ❌ ${pricing.reason || "견적 불가: 담당자에게 문의하세요."}
 `;
         }
@@ -211,7 +314,7 @@ export default function FieldNewPage() {
 고객: ${customerName} (${customerPhone})
 제품: ${doorLabel(door)}
 실측(최소기준): ${widthMm} × ${heightMm} (mm)
-열림방향: ${openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌"}
+열림방향: ${openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌"}${hasDiffWarn ? `\n\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDiff}mm\n${extraMaterialMessage}` : ""}
 
 자재비(확정): ${formatWon(pricing.materialWon)}
 시공비(별도): ${formatWon(pricing.installWon)}
@@ -223,7 +326,7 @@ export default function FieldNewPage() {
 
 입금 계좌:
 ${BANK_LINE}`;
-    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection]);
+    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage]);
 
     function setPoint(arr: number[], idx: number, value: number) {
         const next = [...arr];
@@ -291,7 +394,7 @@ ${BANK_LINE}`;
                             <div className="mb-4 rounded-xl border border-amber-600/40 bg-amber-950/30 p-4 text-amber-200">
                                 <div className="font-semibold">실측 오차 경고</div>
                                 <div className="text-sm mt-1">가로 오차: {wDiff}mm / 세로 오차: {hDiff}mm</div>
-                                <div className="text-sm mt-2">추가자재(마감재) 사용이 필요할 수 있습니다. 추가 비용 가능성을 고객에게 안내해 주세요.</div>
+                                <div className="text-sm mt-2">{extraMaterialMessage}</div>
                             </div>
                         )}
 
@@ -327,6 +430,44 @@ ${BANK_LINE}`;
                                     ))}
                                 </div>
                             </div>
+
+                            {/* ✅ Validation Warning & Swap UI */}
+                            {whGuard.warnings.length > 0 ? (
+                                <div className="rounded-2xl border border-amber-600/40 bg-amber-950/30 p-4 text-amber-100">
+                                    <div className="font-semibold">가로/세로 입력 확인</div>
+                                    <ul className="list-disc pl-5 mt-2 text-sm space-y-1">
+                                        {whGuard.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                                    </ul>
+
+                                    {(whGuard.suggestSwap || whGuard.swapImproves) ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const oldW = widthPoints;
+                                                // Note: Since we use points, we should ideally swap the points.
+                                                // But the prompt code uses widthMm/heightMm.
+                                                // We must swap the underlying point state to be correct.
+                                                setWidthPoints(heightPoints);
+                                                setHeightPoints(oldW);
+                                                speakKo("가로와 세로를 바꿨습니다. 값이 맞는지 다시 확인해 주세요.");
+                                            }}
+                                            className="mt-3 w-full rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-600/40 py-3 font-semibold"
+                                        >
+                                            가로/세로 바꾸기
+                                        </button>
+                                    ) : null}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            speakKo(`확인 안내. 현재 입력은 가로 ${widthMm} 밀리미터, 세로 ${heightMm} 밀리미터 입니다.`);
+                                        }}
+                                        className="mt-2 w-full rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-700 py-3 font-semibold text-zinc-100"
+                                    >
+                                        음성으로 다시 읽기
+                                    </button>
+                                </div>
+                            ) : null}
 
                             <div className="rounded-xl border border-white/10 p-3 bg-black/20">
                                 <div className="text-sm text-white/70">자동 계산(최소기준)</div>
@@ -504,9 +645,15 @@ ${BANK_LINE}`;
                                 {/* Send Button: Disabled if pricing invalid */}
                                 <div className="mt-2 flex gap-2">
                                     <button
-                                        disabled={!pricing.ok}
-                                        className={`w-full rounded-xl py-3 font-semibold ${pricing.ok ? "bg-indigo-600 hover:bg-indigo-500 text-white" : "bg-zinc-800 text-zinc-500 cursor-not-allowed"}`}
+                                        disabled={strongWarn || !pricing.ok}
+                                        className={`w-full rounded-xl py-3 font-semibold ${(strongWarn || !pricing.ok)
+                                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                                : "bg-white text-black"
+                                            }`}
                                         onClick={async () => {
+                                            // ✅ 마지막 확정 음성(실수 방지)
+                                            speakKo(`최종 확인. ${getDoorRangeRule(door).label} 가로 ${widthMm} 세로 ${heightMm}. 맞으면 진행합니다.`);
+
                                             await navigator.clipboard.writeText(customerMessage);
                                             alert("메시지가 복사되었습니다.");
                                         }}
@@ -514,6 +661,11 @@ ${BANK_LINE}`;
                                         {!pricing.ok ? "전송 불가 (견적 오류)" : "메시지 복사"}
                                     </button>
                                 </div>
+                                {strongWarn ? (
+                                    <div className="mt-2 text-xs text-amber-300">
+                                        ⚠️ 가로/세로 입력 확인이 필요합니다. (오류 가능성 높음) 확인 후 진행하세요.
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
 
