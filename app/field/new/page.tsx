@@ -23,6 +23,51 @@ const DEFAULT_GLASS_DESIGN: GlassDesign = {
     bigArchVertical: false,
 };
 
+type GlassKey =
+    | "CLEAR"                 // 기본 투명
+    | "BRONZE_CLEAR"          // 투명(브론즈)
+    | "DARKGRAY_CLEAR"        // 투명(다크그레이)
+    | "BRONZE_SATIN"          // 불투명(브론즈샤틴)
+    | "DARK_SATIN"            // 불투명(다크샤틴)
+    | "CLEAR_SATIN"           // 불투명(투명샤틴)
+    | "AQUA"                  // 디자인(아쿠아)
+    | "MIST"                  // 디자인(미스트)
+    | "FLUTED"                // 디자인(플루트)
+    | "MORU"                  // 디자인(모루)
+    | "WIRE"                  // 특수(망입)
+    | "FILM";                 // 특수(필름)
+
+const GLASS_OPTIONS: { key: GlassKey; label: string; addPrice: number; group: string }[] = [
+    // 기본
+    { key: "CLEAR", label: "기본 투명", addPrice: 0, group: "기본" },
+
+    // 투명(색상)
+    { key: "BRONZE_CLEAR", label: "브론즈(투명)", addPrice: 70000, group: "투명(색상)" },
+    { key: "DARKGRAY_CLEAR", label: "다크그레이(투명)", addPrice: 70000, group: "투명(색상)" },
+
+    // 불투명(샤틴)
+    { key: "BRONZE_SATIN", label: "브론즈 샤틴(불투명)", addPrice: 80000, group: "불투명(샤틴)" },
+    { key: "DARK_SATIN", label: "다크 샤틴(불투명)", addPrice: 80000, group: "불투명(샤틴)" },
+    { key: "CLEAR_SATIN", label: "투명 샤틴(불투명)", addPrice: 80000, group: "불투명(샤틴)" },
+
+    // 디자인 유리
+    { key: "AQUA", label: "아쿠아(디자인)", addPrice: 100000, group: "디자인 유리" },
+    { key: "MIST", label: "미스트(디자인)", addPrice: 100000, group: "디자인 유리" },
+    { key: "FLUTED", label: "플루트(디자인)", addPrice: 100000, group: "디자인 유리" },
+    { key: "MORU", label: "모루(디자인)", addPrice: 100000, group: "디자인 유리" },
+
+    // 특수 유리
+    { key: "WIRE", label: "망입 유리(특수)", addPrice: 120000, group: "특수 유리" },
+    { key: "FILM", label: "필름 유리(특수)", addPrice: 120000, group: "특수 유리" },
+];
+
+function getGlassOption(glassType: GlassKey) {
+    return GLASS_OPTIONS.find((g) => g.key === glassType) ?? GLASS_OPTIONS[0];
+}
+function getGlassAddPrice(glassType: GlassKey) {
+    return getGlassOption(glassType).addPrice ?? 0;
+}
+
 type OpenDirection = "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
 
 function formatWon(n: number) {
@@ -210,6 +255,7 @@ export default function FieldNewPage() {
     const [door, setDoor] = useState<DoorKind>("3T_MANUAL");
     const [frameFinish, setFrameFinish] = useState<FrameFinish>("FLUORO");
     const [frameColor, setFrameColor] = useState<FrameColor>("WHITE");
+    const [glassType, setGlassType] = useState<GlassKey>("CLEAR"); // ✅
     const [glassDesign, setGlassDesign] = useState<GlassDesign>(DEFAULT_GLASS_DESIGN);
 
     // ✅ Open Direction
@@ -285,14 +331,15 @@ export default function FieldNewPage() {
             frameFinish,
             frameColor,
             glassDesign,
-            muntinQty, // ✅ Added
+            glassAddWon: getGlassAddPrice(glassType), // ✅
+            muntinQty,
             installFeeWon: INSTALL_FEE,
             discount: {
                 measurerDiscountWon,
                 promoDiscountWon,
             },
         });
-    }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, muntinQty, measurerDiscountWon, promoDiscountWon]);
+    }, [door, widthMm, heightMm, frameFinish, frameColor, glassDesign, glassType, muntinQty, measurerDiscountWon, promoDiscountWon]);
 
     // 🔊 TTS & Alert for Measurement Deviation
     const wDiff = useMemo(() => maxDiff(widthPoints), [widthPoints]);
@@ -341,13 +388,11 @@ export default function FieldNewPage() {
         setHeightPoints(prev => resizeArray(prev, req.height));
     }, [door]);
 
-
-
     // 🔊 TTS & Block for Invalid Pricing
     useEffect(() => {
         if (!pricing) return;
         if (pricing.ok === false && pricing.reason) {
-            speakKo(pricing.reason);
+            // speakKo(pricing.reason); // Removed auto-speak
         }
     }, [pricing?.ok, pricing?.reason]);
 
@@ -360,10 +405,6 @@ export default function FieldNewPage() {
         (whGuard.swapImproves && (whGuard.suggestSwap || heightMm < 1800)) ||
         // 제품별 정상범위에서 둘 중 하나라도 크게 벗어남(경고 문구 1개 이상이면 잠금)
         whGuard.warnings.length > 0;
-
-
-
-
 
     // 🔊 TTS for Extras
     useEffect(() => {
@@ -403,11 +444,15 @@ ${hasDiffWarn ? `\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDif
 `;
         }
 
+        const glassOpt = getGlassOption(glassType);
+
         return `[림스도어 실측/견적 안내]
 고객: ${customerName} (${customerPhone})
 제품: ${doorLabel(door)}
 실측(최소기준): ${widthMm} × ${heightMm} (mm)
 열림방향: ${openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌"}${hasDiffWarn ? `\n\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDiff}mm\n${extraMaterialMessage}` : ""}
+
+유리: ${glassOpt.label} ${glassOpt.addPrice > 0 ? `(+${glassOpt.addPrice.toLocaleString()}원)` : "(기본)"}
 
 자재비(확정): ${formatWon(pricing.materialWon)}
 시공비(별도): ${formatWon(pricing.installWon)}
@@ -419,7 +464,7 @@ ${hasDiffWarn ? `\n[실측 오차 안내]\n가로Δ ${wDiff}mm / 세로Δ ${hDif
 
 입금 계좌:
 ${BANK_LINE}`;
-    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage, extraDemolition, extraCarpentry, extraMoving, movingFloor, isNewApartment]);
+    }, [customerName, customerPhone, door, widthMm, heightMm, pricing, openDirection, hasDiffWarn, wDiff, hDiff, extraMaterialMessage, extraDemolition, extraCarpentry, extraMoving, movingFloor, isNewApartment, glassType]);
 
     function setPoint(arr: number[], idx: number, value: number) {
         const next = [...arr];
@@ -449,6 +494,8 @@ ${BANK_LINE}`;
                     }
                 })();
 
+                const gOpt = getGlassOption(glassType);
+
                 return {
                     // ✅ 제품
                     doorType: doorMeta.type,
@@ -461,7 +508,9 @@ ${BANK_LINE}`;
                     frameColor,
 
                     // ✅ 유리
-                    glassType: "기본(투명/브론즈 등)", // glassDesign에 구체적 타입 없음(GlassBase만 있음)
+                    glassType: glassType,
+                    glassLabel: gOpt.label,
+                    glassAddPrice: gOpt.addPrice,
                     glassDesign: glassDesign.archBasic ? "아치형" : "일반", // 단순화 예시
                     glassDetail: glassDesign, // 전체 객체 저장
                     muntinQty, // ✅ 간살 수량
@@ -807,6 +856,71 @@ ${BANK_LINE}`;
                                     </div>
                                 </div>
 
+                                {/* ✅ 유리 종류 선택 (필수) */}
+                                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                                    <div className="mb-2 text-sm font-semibold text-white/90">유리 종류</div>
+
+                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        <select
+                                            className="h-11 w-full rounded-lg bg-black/30 px-3 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-2"
+                                            value={glassType}
+                                            onChange={(e) => setGlassType(e.target.value as GlassKey)}
+                                        >
+                                            {/* 그룹별로 보기 좋게 */}
+                                            <optgroup label="기본">
+                                                {GLASS_OPTIONS.filter(g => g.group === "기본").map(g => (
+                                                    <option key={g.key} value={g.key}>
+                                                        {g.label} (기본)
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+
+                                            <optgroup label="투명(색상) +7만원">
+                                                {GLASS_OPTIONS.filter(g => g.group === "투명(색상)").map(g => (
+                                                    <option key={g.key} value={g.key}>
+                                                        {g.label} (+{g.addPrice.toLocaleString()}원)
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+
+                                            <optgroup label="불투명(샤틴) +8만원">
+                                                {GLASS_OPTIONS.filter(g => g.group === "불투명(샤틴)").map(g => (
+                                                    <option key={g.key} value={g.key}>
+                                                        {g.label} (+{g.addPrice.toLocaleString()}원)
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+
+                                            <optgroup label="디자인 유리 +10만원">
+                                                {GLASS_OPTIONS.filter(g => g.group === "디자인 유리").map(g => (
+                                                    <option key={g.key} value={g.key}>
+                                                        {g.label} (+{g.addPrice.toLocaleString()}원)
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+
+                                            <optgroup label="특수 유리 +12만원">
+                                                {GLASS_OPTIONS.filter(g => g.group === "특수 유리").map(g => (
+                                                    <option key={g.key} value={g.key}>
+                                                        {g.label} (+{g.addPrice.toLocaleString()}원)
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        </select>
+
+                                        <div className="flex items-center rounded-lg bg-black/20 px-3 text-sm text-white/80 ring-1 ring-white/10">
+                                            유리 추가금:
+                                            <span className="ml-2 font-semibold text-white">
+                                                {getGlassAddPrice(glassType).toLocaleString()}원
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-2 text-xs text-white/50">
+                                        ※ 유리 종류 변경 시 자동으로 추가금이 반영됩니다.
+                                    </div>
+                                </div>
+
                                 {/* 3. Glass Designs (Moved to Component) */}
                                 <GlassDesignOptions
                                     value={glassDesign}
@@ -1059,7 +1173,7 @@ ${BANK_LINE}`;
                             <div>기본 {pricing.baseWon.toLocaleString()}</div>
                             <div>사이즈 {pricing.sizeSurchargeWon.toLocaleString()}</div>
                             <div>프레임 {pricing.frameSurchargeWon.toLocaleString()}</div>
-                            <div>유리/디자인 {pricing.glassDesignWon.toLocaleString()}</div>
+                            <div>유리/디자인 {(pricing.glassDesignWon + pricing.glassCost).toLocaleString()}</div>
                             {pricing.discountWon > 0 && <div className="text-orange-300">할인 -{pricing.discountWon.toLocaleString()}</div>}
                         </div>
                     </div>

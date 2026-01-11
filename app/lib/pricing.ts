@@ -47,6 +47,9 @@ export type PricingInput = {
     glassBase?: GlassBase;
     glassDesign?: GlassDesign;
 
+    // ✅ 유리 종류 추가금 (외부에서 계산해서 주입)
+    glassAddWon?: number;
+
     // ✅ 간살 (별도 수량)
     muntinQty?: number;
 
@@ -69,7 +72,8 @@ export type PricingOutput = {
     sizeSurchargeWon: number;
     frameSurchargeWon: number;
     glassDesignWon: number;
-    muntinCost: number; // ✅ Start of Muntin Cost
+    muntinCost: number;
+    glassCost: number; // ✅
     discountWon: number;
 
     // ✅ 고객표시용
@@ -202,7 +206,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
             glassDesignWon: 0,
-            muntinCost: 0, // ✅
+            muntinCost: 0,
+            glassCost: 0, // ✅
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -222,7 +227,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon: 0,
             frameSurchargeWon: 0,
             glassDesignWon: 0,
-            muntinCost: 0, // ✅
+            muntinCost: 0,
+            glassCost: 0, // ✅
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -236,14 +242,17 @@ export function calcPricing(input: PricingInput): PricingOutput {
     const frameSurchargeWon = calcFrameSurcharge(input.door, input.frameFinish, input.frameColor);
     const glassDesignWon = calcGlassDesignWon(input.door, input.glassDesign);
 
+    // ✅ 유리 종류 추가금
+    const glassCost = clampInt(input.glassAddWon ?? 0);
+
     // ✅ 간살 비용 추가
     const muntinCost = (input.muntinQty ?? 0) * 20000;
 
     const measurerDiscount = clampInt(input.discount?.measurerDiscountWon ?? 0);
     const promoDiscount = clampInt(input.discount?.promoDiscountWon ?? 0);
 
-    // Total calculation including muntinCost
-    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + muntinCost + installWon;
+    // Total calculation including glassCost & muntinCost
+    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + installWon;
     const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount);
 
     const totalWon = Math.max(0, totalBeforeDiscount - discountWon);
@@ -261,12 +270,13 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon,
             frameSurchargeWon,
             glassDesignWon,
-            muntinCost, // ✅ Added
+            muntinCost,
+            glassCost, // ✅
             discountWon,
             materialWon: 0,
             installWon,
             totalWon: 0,
-            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, muntinCost, installWon, discountWon, totalWon: 0, materialWon: 0 },
+            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, glassCost, muntinCost, installWon, discountWon, totalWon: 0, materialWon: 0 },
         };
     }
 
@@ -278,7 +288,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
         sizeSurchargeWon,
         frameSurchargeWon,
         glassDesignWon,
-        muntinCost, // ✅ Added
+        muntinCost,
+        glassCost, // ✅
         discountWon,
         materialWon,
         installWon,
@@ -288,7 +299,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             sizeSurchargeWon,
             frameSurchargeWon,
             glassDesignWon,
-            muntinCost, // ✅ Added
+            muntinCost,
+            glassCost, // ✅
             installWon,
             discountWon,
             totalWon,
