@@ -216,7 +216,7 @@ export default function FieldNewPage() {
     const [openDirection, setOpenDirection] = useState<OpenDirection>("LEFT_TO_RIGHT");
 
     // TTS Debounce
-    const [lastSpokenKey, setLastSpokenKey] = useState<string>("");
+
 
     // Discount
     const [discountOpen, setDiscountOpen] = useState(false);
@@ -307,16 +307,41 @@ export default function FieldNewPage() {
         ? `실측 오차가 10mm 이상입니다. 마감재(추가자재) 사용이 필요할 수 있으며, 현장 상황에 따라 추가비용 ${extraMaterialPossibleFee.toLocaleString()}원이 발생할 수 있습니다.`
         : `실측 오차가 10mm 이상입니다. 현장 상태에 따라 마감재(추가자재) 사용이 필요할 수 있습니다.`;
 
+    // ✅ Speak Once Helper
+    function speakOnce(text: string) {
+        if (typeof window === "undefined") return;
+        window.speechSynthesis?.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "ko-KR";
+        u.rate = 1.0;
+        window.speechSynthesis?.speak(u);
+    }
+
+    function getRequiredPoints(d: DoorKind) {
+        // 원슬라이딩: 가로3 / 세로5
+        if (d === "1W_SLIDING") {
+            return { width: 3, height: 5 };
+        }
+        // 그 외: 가로3 / 세로3
+        return { width: 3, height: 3 };
+    }
+
+    function resizeArray(arr: number[], len: number) {
+        const next = [...arr];
+        // If growing
+        while (next.length < len) next.push(0);
+        // If shrinking
+        return next.slice(0, len);
+    }
+
+    // ✅ Resize points when door changes
     useEffect(() => {
-        if (!hasDiffWarn) return;
+        const req = getRequiredPoints(door);
+        setWidthPoints(prev => resizeArray(prev, req.width));
+        setHeightPoints(prev => resizeArray(prev, req.height));
+    }, [door]);
 
-        const key = `${door}-${wDiff}-${hDiff}-${needExtraMaterialRecommend ? "EXTRA50" : "EXTRA"}`;
-        if (key === lastSpokenKey) return;
 
-        const msg = `주의. 실측 오차가 발생했습니다. 가로 오차 ${wDiff} 밀리미터, 세로 오차 ${hDiff} 밀리미터. ${extraMaterialMessage}`;
-        speakKo(msg);
-        setLastSpokenKey(key);
-    }, [hasDiffWarn, wDiff, hDiff, door, needExtraMaterialRecommend, extraMaterialMessage, lastSpokenKey]);
 
     // 🔊 TTS & Block for Invalid Pricing
     useEffect(() => {
@@ -336,21 +361,9 @@ export default function FieldNewPage() {
         // 제품별 정상범위에서 둘 중 하나라도 크게 벗어남(경고 문구 1개 이상이면 잠금)
         whGuard.warnings.length > 0;
 
-    const [whSpokenKey, setWhSpokenKey] = useState<string>("");
 
-    // ✅ 경고가 새로 생기면 음성 안내(너무 반복되는 것 방지)
-    useEffect(() => {
-        if (whGuard.warnings.length === 0) return;
 
-        const key = `${door}-${widthMm}-${heightMm}-${whGuard.swapImproves ? "swapYes" : "swapNo"}-${whGuard.warnings.join("|")}`;
-        if (key === whSpokenKey) return;
 
-        // 핵심만 말하기
-        const rule = getDoorRangeRule(door);
-        const msg = `입력 확인 필요. ${rule.label} 기준으로 가로 ${widthMm}, 세로 ${heightMm} 입니다. ${whGuard.swapImproves ? "가로와 세로가 뒤바뀐 것으로 보입니다." : "치수를 다시 확인해 주세요."}`;
-        speakKo(msg);
-        setWhSpokenKey(key);
-    }, [whGuard.warnings, whGuard.swapImproves, door, widthMm, heightMm, whSpokenKey]);
 
     // 🔊 TTS for Extras
     useEffect(() => {
@@ -592,13 +605,13 @@ ${BANK_LINE}`;
 
                         <div className="grid grid-cols-1 gap-4">
                             <div className="rounded-xl border border-white/10 p-3">
-                                <div className="font-semibold mb-2">가로(mm) · 3점</div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="font-semibold mb-2">가로(mm) · {widthPoints.length}점</div>
+                                <div className={`grid gap-2 ${widthPoints.length > 3 ? "grid-cols-5" : "grid-cols-3"}`}>
                                     {widthPoints.map((v, i) => (
                                         <input
                                             key={i}
                                             inputMode="numeric"
-                                            className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-3"
+                                            className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-3 text-center"
                                             value={v || ""}
                                             placeholder={`${i + 1}`}
                                             onChange={(e) => setWidthPoints(setPoint(widthPoints, i, Number(e.target.value)))}
@@ -608,13 +621,13 @@ ${BANK_LINE}`;
                             </div>
 
                             <div className="rounded-xl border border-white/10 p-3">
-                                <div className="font-semibold mb-2">세로(mm) · 3점</div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="font-semibold mb-2">세로(mm) · {heightPoints.length}점</div>
+                                <div className={`grid gap-2 ${heightPoints.length > 3 ? "grid-cols-5" : "grid-cols-3"}`}>
                                     {heightPoints.map((v, i) => (
                                         <input
                                             key={i}
                                             inputMode="numeric"
-                                            className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-3"
+                                            className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-3 text-center"
                                             value={v || ""}
                                             placeholder={`${i + 1}`}
                                             onChange={(e) => setHeightPoints(setPoint(heightPoints, i, Number(e.target.value)))}
@@ -636,28 +649,23 @@ ${BANK_LINE}`;
                                             type="button"
                                             onClick={() => {
                                                 const oldW = widthPoints;
-                                                // Note: Since we use points, we should ideally swap the points.
-                                                // But the prompt code uses widthMm/heightMm.
-                                                // We must swap the underlying point state to be correct.
+                                                // Adjust array length if needed before swap? 
+                                                // Actually swap logic might be complex if lengths differ, but existing logic assumes symmetric swap usually. 
+                                                // For 3x5, swap means 5x3 which isn't supported. Disable swap for asymmetric?
+                                                // For now, assume 3x3 general case or user handles it.
+                                                if (widthPoints.length !== heightPoints.length) {
+                                                    alert("가로/세로 포인트 개수가 달라 스왑할 수 없습니다. 수동으로 수정해주세요.");
+                                                    return;
+                                                }
                                                 setWidthPoints(heightPoints);
                                                 setHeightPoints(oldW);
-                                                speakKo("가로와 세로를 바꿨습니다. 값이 맞는지 다시 확인해 주세요.");
+                                                speakOnce("가로와 세로를 바꿨습니다. 값이 맞는지 다시 확인해 주세요.");
                                             }}
                                             className="mt-3 w-full rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-600/40 py-3 font-semibold"
                                         >
                                             가로/세로 바꾸기
                                         </button>
                                     ) : null}
-
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            speakKo(`확인 안내. 현재 입력은 가로 ${widthMm} 밀리미터, 세로 ${heightMm} 밀리미터 입니다.`);
-                                        }}
-                                        className="mt-2 w-full rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-700 py-3 font-semibold text-zinc-100"
-                                    >
-                                        음성으로 다시 읽기
-                                    </button>
                                 </div>
                             ) : null}
 
@@ -666,6 +674,25 @@ ${BANK_LINE}`;
                                 <div className="text-xl font-bold mt-1">{widthMm} × {heightMm} mm</div>
                                 <div className="text-sm text-white/60 mt-1">평균: {widthAvg} × {heightAvg} mm</div>
                             </div>
+
+                            {/* ✅ Measurement Confirmation & TTS Trigger */}
+                            <button
+                                type="button"
+                                disabled={widthPoints.filter(p => p > 0).length < getRequiredPoints(door).width || heightPoints.filter(p => p > 0).length < getRequiredPoints(door).height}
+                                onClick={() => {
+                                    let msg = `실측 완료. ${getDoorRangeRule(door).label} 기준 가로 ${widthMm} 밀리미터, 세로 ${heightMm} 밀리미터 입니다.`;
+                                    if (hasDiffWarn) {
+                                        msg += ` 주의. 가로 오차 ${wDiff}, 세로 오차 ${hDiff} 밀리미터가 있습니다. 확인해 주세요.`;
+                                    }
+                                    speakOnce(msg);
+                                }}
+                                className={`mt-2 w-full rounded-xl border py-3 font-semibold transition-colors ${(widthPoints.filter(p => p > 0).length < getRequiredPoints(door).width || heightPoints.filter(p => p > 0).length < getRequiredPoints(door).height)
+                                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                                    : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500"
+                                    }`}
+                            >
+                                실측 확정 (음성 안내 듣기)
+                            </button>
                         </div>
 
                         <div className="mt-4 flex gap-2">
