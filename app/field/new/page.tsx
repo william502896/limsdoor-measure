@@ -132,6 +132,92 @@ const STEPS: { key: StepKey; label: string }[] = [
     { key: "send", label: "6.전송" },
 ];
 
+
+function fmt(n: any) {
+    const num = typeof n === "number" ? n : Number(n);
+    return Number.isFinite(num) ? `${num}` : "-";
+}
+
+function joinPoints(arr: any[]) {
+    if (!Array.isArray(arr)) return "-";
+    const cleaned = arr.map((v) => (v === null || v === undefined || v === "" ? "-" : String(v)));
+    return cleaned.join(", ");
+}
+
+function safeText(v: any, fallback = "-") {
+    if (v === null || v === undefined) return fallback;
+    const s = String(v).trim();
+    return s.length ? s : fallback;
+}
+
+/**
+ * ✅ 고객 전송용 "분쟁 방지형" 메시지 생성
+ */
+export function buildCustomerMessage(args: {
+    customer: { name: string; phone: string; address?: string };
+    doorKindLabel: string;            // 예: "원슬라이딩", "3연동(수동)"
+    openDirectionLabel: string;       // 예: "좌→우", "우→좌"
+    frameColorLabel: string;          // 예: "블랙", "화이트", ...
+    glassLabel: string;               // 예: "투명(기본)", "브론즈샤틴", ...
+    widthPoints: (number | null)[];
+    heightPoints: (number | null)[];
+    confirmedW: number | null;
+    confirmedH: number | null;
+    oneSlideMountLabel?: string | null; // 예: "벽부형" | "오픈형" | null
+    autoParts?: { uVerticalBar?: number; cornerBar?: number } | null;
+    totalPrice: number;              // 총 금액
+    materialPrice: number;           // 자재비
+    installPrice: number;            // 시공비
+    requestDate?: string;            // 시공요청일
+    requestTime?: string;            // 시공시간
+    memo?: string;
+}) {
+    const c = args.customer;
+
+    const partsText = args.autoParts
+        ? `- 자동 포함 자재: ㄷ형 세로바 ${args.autoParts.uVerticalBar ?? 0}개, 각바 ${args.autoParts.cornerBar ?? 0}개`
+        : "- 자동 포함 자재: -";
+
+    const mountText = args.oneSlideMountLabel ? `- 원슬라이딩 분류: ${args.oneSlideMountLabel}` : null;
+
+    const scheduleText = (args.requestDate || args.requestTime)
+        ? `- 시공 일정: ${safeText(args.requestDate)} ${safeText(args.requestTime, "")}`.trim()
+        : "- 시공 일정: 추후 확정";
+
+    const memoText = args.memo?.trim() ? `- 현장 메모: ${args.memo.trim()}` : "";
+
+    return [
+        "[림스도어 현장실측/견적 안내]",
+        `고객: ${safeText(c.name)} (${safeText(c.phone)})`,
+        c.address ? `현장: ${safeText(c.address)}` : "",
+        "",
+        "✅ 주문(확정) 정보",
+        `- 제품: ${safeText(args.doorKindLabel)}`,
+        `- 확정 사이즈: W ${fmt(args.confirmedW)} x H ${fmt(args.confirmedH)} (mm)`,
+        `- 문 방향(거실→현관 기준): ${safeText(args.openDirectionLabel)}`,
+        `- 프레임 색상: ${safeText(args.frameColorLabel)}`,
+        `- 유리 종류: ${safeText(args.glassLabel)}`,
+        mountText ?? "",
+        args.oneSlideMountLabel ? partsText : "",
+        "",
+        "📏 실측 원본(증빙)",
+        `- 가로 포인트: ${joinPoints(args.widthPoints)} (mm)`,
+        `- 세로 포인트: ${joinPoints(args.heightPoints)} (mm)`,
+        "",
+        "💰 금액",
+        `- 자재비: ${Number(args.materialPrice).toLocaleString()}원`,
+        `- 시공비: ${Number(args.installPrice).toLocaleString()}원`,
+        `- 총 합계: ${Number(args.totalPrice).toLocaleString()}원`,
+        "",
+        scheduleText,
+        memoText,
+        memoText ? "" : "",
+        "※ 위 정보(사이즈/방향/유리/색상)는 확정 기준이며, 변경 시 금액/납기 변동이 있을 수 있습니다.",
+    ]
+        .filter((line) => line !== "")
+        .join("\n");
+}
+
 function formatWon(n: number) {
     return new Intl.NumberFormat("ko-KR").format(Math.max(0, Math.floor(n))) + "원";
 }
@@ -499,6 +585,13 @@ export default function FieldNewPage() {
         if (!isCustomerValid) return alert("고객 정보(이름/연락처)를 먼저 입력해주세요.");
         if (!isTrustAllChecked) return alert("고지 확인 설문을 모두 체크해야 저장/전송할 수 있습니다.");
 
+        // ✅ Dispute Prevention: Confirmed Size Validation
+        if (!confirmedW || !confirmedH) {
+            alert("확정 사이즈가 없습니다. 실측값 입력 후 확정 사이즈를 확인해주세요.");
+            setStep("measure");
+            return;
+        }
+
         const doorInfo = { type: door, detail: doorLabel(door) };
         const optionInfo = {
             frameFinish, frameColor, glassType, glassDesign, muntinQty,
@@ -569,33 +662,36 @@ export default function FieldNewPage() {
 
     // Customer Message Builder (Enhanced)
     const customerMessage = useMemo(() => {
-        const total = formatWon(pricing.totalWon);
+        const doorKindLabel = door === "1W_SLIDING" ? "원슬라이딩" : door === "3T_MANUAL" ? "3연동" : doorLabel(door);
+        const oneSlideMountLabel = door === "1W_SLIDING" ? (oneSlideMount === "WALL" ? "벽부형" : "오픈형") : null;
+
+        const openDirLabel = openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌";
         const glassInfo = getGlassOption(glassType);
 
-        const baseMessage = [
-            `[림스도어 현장실측]`,
-            `고객: ${customer.name}`,
-            `연락처: ${customer.phone}`,
-            `도어: ${doorLabel(door)}`,
-            `옵션: ${glassInfo.label} / ${glassDesign.muntinSet2LinesCount > 0 ? `간살 ${glassDesign.muntinSet2LinesCount}set` : "기본"}`,
-            extraDemolition ? "- 철거포함" : "",
-            `총 견적: ${total}`,
-            memo ? `메모: ${memo}` : ""
-        ].filter(Boolean).join("\n");
-
-        const trustSummary = formatTrustSummary(trust);
-        const trustHeader = isTrustAllChecked
-            ? "✅ 고객 안내 완료: 시공 방식/시간/추가자재 가능성까지 모두 고지드렸습니다.\n"
-            : "⚠️ 고객 안내 확인이 미완료입니다(고지확인 단계 체크 필요).\n";
-
-        return [
-            trustHeader,
-            baseMessage,
-            "",
-            "------------------------------",
-            trustSummary,
-        ].join("\n");
-    }, [pricing, customer, door, trust, isTrustAllChecked, glassType, glassDesign, extraDemolition, memo]);
+        return buildCustomerMessage({
+            customer,
+            doorKindLabel,
+            openDirectionLabel: openDirLabel,
+            frameColorLabel: frameColor,
+            glassLabel: glassInfo.label,
+            widthPoints: widthPoints,
+            heightPoints: heightPoints,
+            confirmedW: confirmedW > 0 ? confirmedW : null,
+            confirmedH: confirmedH > 0 ? confirmedH : null,
+            oneSlideMountLabel,
+            autoParts: door === "1W_SLIDING" ? autoParts : null,
+            totalPrice: pricing.totalWon,
+            materialPrice: pricing.materialWon,
+            installPrice: pricing.installWon,
+            requestDate: installDate,
+            requestTime: installTime,
+            memo
+        });
+    }, [
+        customer, door, oneSlideMount, openDirection, frameColor, glassType,
+        widthPoints, heightPoints, confirmedW, confirmedH, autoParts, pricing,
+        installDate, installTime, memo
+    ]);
 
     // Copy Message
     async function copyMessage() {
