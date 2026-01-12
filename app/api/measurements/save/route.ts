@@ -14,10 +14,24 @@ export async function POST(req: Request) {
         const sb = supabaseAdmin(); // ✅ service_role 사용
 
         // 필수 최소값 방어
-        const customer_name = body?.customer?.name ?? "";
-        const customer_phone = cleanPhone(body?.customer?.phone ?? "");
-        const width_mm = Number(body?.measurement?.widthMm ?? 0);
-        const height_mm = Number(body?.measurement?.heightMm ?? 0);
+        // 필수 최소값 방어 & Payload Parsing (Flat vs Nested)
+        const customer_name = body?.customer_name ?? body?.customer?.name ?? "";
+        const customer_phone = cleanPhone(body?.customer_phone ?? body?.customer?.phone ?? "");
+        const customer_address = body?.customer_address ?? body?.customer?.address ?? null;
+
+        const width_mm = Number(body?.measure?.widthMm ?? body?.measurement?.widthMm ?? 0);
+        const height_mm = Number(body?.measure?.heightMm ?? body?.measurement?.heightMm ?? 0);
+
+        const door_type = body?.door?.type ?? body?.options?.doorType ?? null;
+        const open_direction = body?.door?.openDirection ?? body?.options?.openDirection ?? null;
+
+        // JSON Columns
+        const door_detail = body?.door_detail ?? body?.options?.doorDetail ?? null; // New logic prefers explicit door_detail
+        const trust_check = body?.trust_check ?? null;
+
+        const pricing_json = body?.pricing ?? null;
+        const options_json = body?.options ?? null;
+        const extras_json = body?.extras ?? null;
 
         if (!customer_name || !customer_phone) {
             return NextResponse.json({ error: "고객명/전화번호가 필요합니다." }, { status: 400 });
@@ -29,19 +43,22 @@ export async function POST(req: Request) {
             .insert({
                 customer_name,
                 customer_phone,
-                customer_address: body?.customer?.address ?? null,
+                customer_address,
 
-                door_type: body?.options?.doorType ?? null,
-                door_detail: body?.options?.doorDetail ?? null,
-                open_direction: body?.options?.openDirection ?? null,
+                door_type,
+                door_detail,
+                open_direction,
 
                 width_mm,
                 height_mm,
 
                 // 가격/할인/추가작업 포함
-                pricing_json: body?.pricing ?? null,
-                options_json: body?.options ?? null,
-                extras_json: body?.extras ?? null,
+                pricing_json,
+                options_json,
+                extras_json,
+
+                // Trust Check (New)
+                trust_check,
 
                 memo: body?.memo ?? null,
                 status: body?.status ?? "DRAFT",

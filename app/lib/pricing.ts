@@ -53,6 +53,14 @@ export type PricingInput = {
     // ✅ 간살 (별도 수량)
     muntinQty?: number;
 
+    // ✅ Extras Input
+    extras?: {
+        demolition: boolean;
+        carpentry: boolean;
+        moving: boolean;
+        movingFloor: number;
+    };
+
     // 시공비(고객에게는 별도 표기)
     installFeeWon?: number; // 기본 150,000
 
@@ -73,7 +81,8 @@ export type PricingOutput = {
     frameSurchargeWon: number;
     glassDesignWon: number;
     muntinCost: number;
-    glassCost: number; // ✅
+    glassCost: number;
+    extrasWon: number; // ✅
     discountWon: number;
 
     // ✅ 고객표시용
@@ -133,10 +142,6 @@ function calcSizeSurcharge(door: DoorKind, w: number, h: number) {
 }
 
 // ✅ 프레임 색상 규칙
-// - 화이트 기본 0
-// - 화이트 이외 "불소도장" = +70,000
-// - "아노다이징" = +100,000
-// - 호패(여닫이)는 "아노다이징 화이트"가 기본. (메탈블랙/샴페인골드 선택 시 +100,000)
 function calcFrameSurcharge(door: DoorKind, finish?: FrameFinish, color?: FrameColor) {
     const c = color ?? "WHITE";
 
@@ -183,6 +188,18 @@ function calcGlassDesignWon(door: DoorKind, g?: GlassDesign) {
     return muntinSetWon + muntinExtraWon + archWon + bottomPanelWon + cornerArchWon + bigArchWon;
 }
 
+// HELPER for Extras
+function calcExtrasWon(e?: PricingInput["extras"]) {
+    if (!e) return 0;
+    let cost = 0;
+    if (e.demolition) cost += 50000;
+    if (e.carpentry) cost += 100000;
+    if (e.moving) {
+        cost += 50000;
+    }
+    return cost;
+}
+
 export function calcPricing(input: PricingInput): PricingOutput {
     const w = clampInt(input.widthMm);
     const h = clampInt(input.heightMm);
@@ -207,7 +224,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             frameSurchargeWon: 0,
             glassDesignWon: 0,
             muntinCost: 0,
-            glassCost: 0, // ✅
+            glassCost: 0,
+            extrasWon: 0,
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -228,7 +246,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             frameSurchargeWon: 0,
             glassDesignWon: 0,
             muntinCost: 0,
-            glassCost: 0, // ✅
+            glassCost: 0,
+            extrasWon: 0,
             discountWon: 0,
             materialWon: 0,
             installWon,
@@ -241,18 +260,15 @@ export function calcPricing(input: PricingInput): PricingOutput {
     const sizeSurchargeWon = calcSizeSurcharge(input.door, w, h);
     const frameSurchargeWon = calcFrameSurcharge(input.door, input.frameFinish, input.frameColor);
     const glassDesignWon = calcGlassDesignWon(input.door, input.glassDesign);
-
-    // ✅ 유리 종류 추가금
     const glassCost = clampInt(input.glassAddWon ?? 0);
-
-    // ✅ 간살 비용 추가
     const muntinCost = (input.muntinQty ?? 0) * 20000;
+    const extrasWon = calcExtrasWon(input.extras);
 
     const measurerDiscount = clampInt(input.discount?.measurerDiscountWon ?? 0);
     const promoDiscount = clampInt(input.discount?.promoDiscountWon ?? 0);
 
     // Total calculation including glassCost & muntinCost
-    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + installWon;
+    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + extrasWon + installWon;
     const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount);
 
     const totalWon = Math.max(0, totalBeforeDiscount - discountWon);
@@ -271,12 +287,13 @@ export function calcPricing(input: PricingInput): PricingOutput {
             frameSurchargeWon,
             glassDesignWon,
             muntinCost,
-            glassCost, // ✅
+            glassCost,
+            extrasWon,
             discountWon,
             materialWon: 0,
             installWon,
             totalWon: 0,
-            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, glassCost, muntinCost, installWon, discountWon, totalWon: 0, materialWon: 0 },
+            breakdown: { baseWon, sizeSurchargeWon, frameSurchargeWon, glassDesignWon, glassCost, muntinCost, extrasWon, installWon, discountWon, totalWon: 0, materialWon: 0 },
         };
     }
 
@@ -289,7 +306,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
         frameSurchargeWon,
         glassDesignWon,
         muntinCost,
-        glassCost, // ✅
+        glassCost,
+        extrasWon,
         discountWon,
         materialWon,
         installWon,
@@ -300,7 +318,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
             frameSurchargeWon,
             glassDesignWon,
             muntinCost,
-            glassCost, // ✅
+            glassCost,
+            extrasWon,
             installWon,
             discountWon,
             totalWon,
