@@ -85,18 +85,16 @@ export default function CalendarView({ onSelectCustomer, filterType = "all" }: {
                             }
                         }
 
-                        // Determine Customer Data: Priority CRM > Measurement > Fallback
-                        let finalCustomer = fetchOrder.crm_customers;
-                        if (!finalCustomer && measurementCustomer) {
-                            // Synthesize CRM object from Measurement
-                            finalCustomer = {
-                                name: measurementCustomer.name,
-                                phone: measurementCustomer.phone,
-                                address: measurementCustomer.address,
-                                id: "temp-meas",
-                                memo: ""
-                            };
-                        }
+                        // Determine Customer Data: Priority Measurement > CRM > Fallback
+                        // (Changed to prioritize Measurement because CRM data may be incorrect/stale)
+                        let finalCustomer = measurementCustomer ? {
+                            name: measurementCustomer.name,
+                            phone: measurementCustomer.phone,
+                            address: measurementCustomer.address,
+                            id: "temp-meas",
+                            memo: ""
+                        } : fetchOrder.crm_customers;
+
 
                         targetOrder = {
                             id: fetchOrder.id,
