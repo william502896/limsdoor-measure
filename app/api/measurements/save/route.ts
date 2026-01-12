@@ -61,6 +61,7 @@ export async function POST(req: Request) {
                 trust_check,
 
                 memo: body?.memo ?? null,
+                customer_message: body?.customer_message ?? null,
                 status: body?.status ?? "DRAFT",
             })
             .select("id")

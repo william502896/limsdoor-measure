@@ -94,6 +94,31 @@ const DEFAULT_TRUST: TrustCheck = {
     },
 };
 
+function formatTrustSummary(trust: any) {
+    const eq = trust?.equipment ?? {};
+    const ex = trust?.explanation ?? {};
+
+    const yesNo = (v: boolean) => (v ? "✅" : "❌");
+
+    return [
+        "✅ [현장 고지/신뢰 확인 완료]",
+        "",
+        "🔧 시공 장비/방문",
+        `- 레이저 측정기 사용: ${yesNo(!!eq.laser)}`,
+        `- 현장사진 촬영: ${yesNo(!!eq.photos)}`,
+        `- 샘플(유리/프레임) 지참: ${yesNo(!!eq.samples)}`,
+        `- 방문 약속 준수: ${yesNo(!!eq.punctual)}`,
+        "",
+        "🛠 시공 방식/고지 사항",
+        `- 소음·먼지 고지: ${yesNo(!!ex.noiseDust)}`,
+        `- 상/하부 몰딩 제거 고지: ${yesNo(!!ex.moldingRemove)}`,
+        `- 마감 방식 상세 설명: ${yesNo(!!ex.finishing)}`,
+        `- 추가 자재 가능성 고지: ${yesNo(!!ex.extraMaterial)}`,
+        `- 도어 방향 고지: ${yesNo(!!ex.doorDirection)}`,
+        `- 시공 일정 확정 고지: ${yesNo(!!ex.scheduleConfirmed)}`,
+    ].join("\n");
+}
+
 type OpenDirection = "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
 
 // Steps
@@ -124,24 +149,40 @@ function doorLabel(d: DoorKind) {
     }
 }
 
-function getDoorRangeRule(door: DoorKind) {
-    const defaultRule = {
-        label: "일반", minW: 0, maxW: 9999, minH: 0, maxH: 9999,
-        refW: 1200, refH: 2100 // 대략적인 기준
-    };
+type OneSlideMountType = "WALL" | "OPEN"; // 벽부형/오픈형
 
-    switch (door) {
-        case "3T_MANUAL":
-            return { label: "3연동", minW: 1000, maxW: 3000, minH: 1500, maxH: 2400, refW: 1500, refH: 2300 };
-        case "1W_SLIDING":
-            return { label: "원슬라이딩", minW: 700, maxW: 1500, minH: 1500, maxH: 2700, refW: 1200, refH: 2400 };
-        case "SWING_1":
-            return { label: "스윙(1도어)", minW: 400, maxW: 1000, minH: 1500, maxH: 2400, refW: 900, refH: 2100 };
-        // 다른 도어도 필요 시 추가
-        default:
-            return defaultRule;
-    }
+function getMeasureConfig(door: DoorKind) {
+    if (door === "1W_SLIDING") return { widthPoints: 3, heightPoints: 5 };
+    return { widthPoints: 3, heightPoints: 3 }; // Default 3x3 for others (per current UI, but code was initializing 3 originally)
 }
+
+function cleanNums(arr: (number | null | undefined)[]) {
+    return arr
+        .map((v) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null))
+        .filter((v): v is number => v !== null);
+}
+
+function computeConfirmedSize(door: DoorKind, widthArr: number[], heightArr: number[]) {
+    const w = cleanNums(widthArr);
+    const h = cleanNums(heightArr);
+
+    if (w.length === 0 || h.length === 0) return { confirmedW: 0, confirmedH: 0 };
+
+    // ✅ One-Slide: Width=Max, Height=Min
+    if (door === "1W_SLIDING") {
+        return {
+            confirmedW: Math.max(...w),
+            confirmedH: Math.min(...h),
+        };
+    }
+
+    // Default: Min for both (SAFE)
+    return {
+        confirmedW: Math.min(...w),
+        confirmedH: Math.min(...h),
+    };
+}
+
 
 function setPoint(arr: number[], index: number, val: number) {
     const next = [...arr];
@@ -195,16 +236,28 @@ function guardWidthHeight(door: DoorKind, widthMm: number, heightMm: number): WH
 }
 
 
+// Restore getDoorRangeRule
+function getDoorRangeRule(door: DoorKind) {
+    const defaultRule = {
+        label: "일반", minW: 0, maxW: 9999, minH: 0, maxH: 9999,
+        refW: 1200, refH: 2100
+    };
+
+    switch (door) {
+        case "3T_MANUAL": return { label: "3연동", minW: 1000, maxW: 3000, minH: 1500, maxH: 2400, refW: 1500, refH: 2300 };
+        case "1W_SLIDING": return { label: "원슬라이딩", minW: 700, maxW: 1500, minH: 1500, maxH: 2700, refW: 1200, refH: 2400 };
+        case "SWING_1": return { label: "스윙(1도어)", minW: 400, maxW: 1000, minH: 1500, maxH: 2400, refW: 900, refH: 2100 };
+        default: return defaultRule;
+    }
+}
+
+
 export default function FieldNewPage() {
     // Stage Management
     const [step, setStep] = useState<StepKey>("customer");
 
     // Customer
-    const [customer, setCustomer] = useState({
-        name: "",
-        phone: "",
-        address: ""
-    });
+    const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
 
     // Schedule & Memo
     const [installDate, setInstallDate] = useState("");
@@ -212,12 +265,16 @@ export default function FieldNewPage() {
     const [memo, setMemo] = useState("");
     const [photos, setPhotos] = useState<string[]>([]);
 
-    // Measurements
-    const [widthPoints, setWidthPoints] = useState<number[]>([0, 0, 0]);
-    const [heightPoints, setHeightPoints] = useState<number[]>([0, 0, 0]);
-
     // Door & Options
     const [door, setDoor] = useState<DoorKind>("3T_MANUAL");
+    // ✅ One-Slide Mount
+    const [oneSlideMount, setOneSlideMount] = useState<OneSlideMountType>("WALL");
+
+    // Measurements (Dynamic Size)
+    // Initialize with 5 just in case, but effect will trim
+    const [widthPoints, setWidthPoints] = useState<number[]>([]);
+    const [heightPoints, setHeightPoints] = useState<number[]>([]);
+
     const [frameFinish, setFrameFinish] = useState<FrameFinish>("FLUORO");
     const [frameColor, setFrameColor] = useState<FrameColor>("WHITE");
     const [glassType, setGlassType] = useState<GlassKey>("CLEAR");
@@ -226,7 +283,6 @@ export default function FieldNewPage() {
     const [muntinQty, setMuntinQty] = useState<number>(0);
 
     // Extras
-    const [discountOpen, setDiscountOpen] = useState(false);
     const [measurerDiscountWon, setMeasurerDiscountWon] = useState<number>(0);
     const [promoDiscountWon, setPromoDiscountWon] = useState<number>(0);
     const [extraDemolition, setExtraDemolition] = useState(false);
@@ -241,31 +297,51 @@ export default function FieldNewPage() {
     // -------------------------------------------------------------
     // Derived Logic (Pricing & Validation)
     // -------------------------------------------------------------
-    // Auto-toggle demo based on new apartment
+    // Auto-toggle demo
     useEffect(() => {
         if (isNewApartment) setExtraDemolition(false);
     }, [isNewApartment]);
 
-    // Resizing measurement points based on Door Type
-    const getRequiredPoints = (d: DoorKind) => {
-        if (d === "1W_SLIDING") return 5;
-        return 3;
-    }
+    // ✅ Dynamic Measurement Points Rule
+    const measureConfig = useMemo(() => getMeasureConfig(door), [door]);
+
     useEffect(() => {
-        const need = getRequiredPoints(door);
+        const { widthPoints: wN, heightPoints: hN } = measureConfig;
+
         setWidthPoints(prev => {
-            if (prev.length === need) return prev;
-            return need > prev.length ? [...prev, ...Array(need - prev.length).fill(0)] : prev.slice(0, need);
+            if (prev.length === wN) return prev;
+            return wN > prev.length
+                ? [...prev, ...Array(wN - prev.length).fill(0)]
+                : prev.slice(0, wN);
         });
         setHeightPoints(prev => {
-            if (prev.length === need) return prev;
-            return need > prev.length ? [...prev, ...Array(need - prev.length).fill(0)] : prev.slice(0, need);
+            if (prev.length === hN) return prev;
+            return hN > prev.length
+                ? [...prev, ...Array(hN - prev.length).fill(0)]
+                : prev.slice(0, hN);
         });
-    }, [door]);
+    }, [measureConfig]);
 
-    // Calc Width/Height Min
-    const widthMm = useMemo(() => Math.min(...widthPoints.filter(n => n > 0)), [widthPoints]);
-    const heightMm = useMemo(() => Math.min(...heightPoints.filter(n => n > 0)), [heightPoints]);
+    // ✅ Confirmed Size Logic
+    const { confirmedW, confirmedH } = useMemo(() =>
+        computeConfirmedSize(door, widthPoints, heightPoints),
+        [door, widthPoints, heightPoints]);
+
+    // Use confirmed size for pricing (or min, depending on policy? Usually pricing uses confirmed)
+    // BUT legacy pricing used MIN. 
+    // Let's stick to using `confirmedW` and `confirmedH` for pricing inputs IF they are valid (>0).
+    // Fallback to min if 0.
+    const widthMm = confirmedW > 0 ? confirmedW : 0;
+    const heightMm = confirmedH > 0 ? confirmedH : 0;
+
+    // ✅ Auto Parts for One-Slide
+    const autoParts = useMemo(() => {
+        if (door !== "1W_SLIDING") return null;
+        // Wall: U-Bar 1, Corner 1
+        // Open: Corner 2
+        if (oneSlideMount === "WALL") return { uVerticalBar: 1, cornerBar: 1 };
+        return { uVerticalBar: 0, cornerBar: 2 };
+    }, [door, oneSlideMount]);
 
     // Pricing
     const pricing = useMemo(() => {
@@ -429,7 +505,9 @@ export default function FieldNewPage() {
             openDirection
         };
         const measurementPayload = {
-            widthMm, heightMm, widthPoints, heightPoints, memo
+            widthMm, heightMm, widthPoints, heightPoints, memo,
+            confirmedWidthMm: confirmedW,
+            confirmedHeightMm: confirmedH
         };
         const extrasPayload = {
             demolition: extraDemolition, carpentry: extraCarpentry, moving: extraMoving, movingFloor, isNewApartment
@@ -443,7 +521,7 @@ export default function FieldNewPage() {
             // Legacy Structure for API compatibility
             options: {
                 doorType: door,
-                doorDetail: doorLabel(door), // or any detailed object
+                doorDetail: doorLabel(door),
                 ...optionInfo
             },
 
@@ -453,13 +531,24 @@ export default function FieldNewPage() {
 
             door_detail: {
                 ...doorInfo,
-                ...optionInfo
+                ...optionInfo,
+                // ✅ One-Slide Specifics
+                oneSlideMount: door === "1W_SLIDING" ? oneSlideMount : null,
+                autoParts: door === "1W_SLIDING" ? autoParts : null,
             },
             trust_check: trust,
+
+            // ✅ Confirmed Size & Points (Top Level for easier access if API supports, or just rely on measure payload)
+            // The API route handles "width_mm" and "height_mm". We should send the CONFIRMED size as the main size.
+            width_mm: widthMm,
+            height_mm: heightMm,
+            width_points: widthPoints, // API might need update to accept arrays if not already
+            height_points: heightPoints,
 
             pricing: pricing,
             extras: extrasPayload,
             memo: memo,
+            customer_message: customerMessage,
             status: "SAVED"
         };
 
@@ -478,11 +567,35 @@ export default function FieldNewPage() {
         }
     }
 
-    // Customer Message Builder
+    // Customer Message Builder (Enhanced)
     const customerMessage = useMemo(() => {
         const total = formatWon(pricing.totalWon);
-        return `[림스도어 현장실측]\n고객: ${customer.name}\n도어: ${doorLabel(door)}\n총 견적: ${total}\n(신뢰점검 완료)`;
-    }, [pricing, customer, door]);
+        const glassInfo = getGlassOption(glassType);
+
+        const baseMessage = [
+            `[림스도어 현장실측]`,
+            `고객: ${customer.name}`,
+            `연락처: ${customer.phone}`,
+            `도어: ${doorLabel(door)}`,
+            `옵션: ${glassInfo.label} / ${glassDesign.muntinSet2LinesCount > 0 ? `간살 ${glassDesign.muntinSet2LinesCount}set` : "기본"}`,
+            extraDemolition ? "- 철거포함" : "",
+            `총 견적: ${total}`,
+            memo ? `메모: ${memo}` : ""
+        ].filter(Boolean).join("\n");
+
+        const trustSummary = formatTrustSummary(trust);
+        const trustHeader = isTrustAllChecked
+            ? "✅ 고객 안내 완료: 시공 방식/시간/추가자재 가능성까지 모두 고지드렸습니다.\n"
+            : "⚠️ 고객 안내 확인이 미완료입니다(고지확인 단계 체크 필요).\n";
+
+        return [
+            trustHeader,
+            baseMessage,
+            "",
+            "------------------------------",
+            trustSummary,
+        ].join("\n");
+    }, [pricing, customer, door, trust, isTrustAllChecked, glassType, glassDesign, extraDemolition, memo]);
 
     // Copy Message
     async function copyMessage() {
@@ -561,6 +674,32 @@ export default function FieldNewPage() {
                                 </button>
                             </div>
                         </div>
+
+                        {/* One-Slide Specific Options */}
+                        {door === "1W_SLIDING" && (
+                            <div className="p-4 rounded-xl border border-white/10 bg-zinc-900/50 mt-2">
+                                <label className="block text-sm text-zinc-400 mb-2 font-bold text-blue-400">원슬라이딩 설치 타입</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setOneSlideMount("WALL")}
+                                        className={`flex-1 py-3 rounded-lg border ${oneSlideMount === "WALL" ? "bg-blue-600 border-blue-500 text-white" : "border-white/20 text-zinc-400"}`}
+                                    >
+                                        벽부형
+                                    </button>
+                                    <button
+                                        onClick={() => setOneSlideMount("OPEN")}
+                                        className={`flex-1 py-3 rounded-lg border ${oneSlideMount === "OPEN" ? "bg-zinc-700 border-white/30 text-white" : "border-white/20 text-zinc-400"}`}
+                                    >
+                                        오픈형
+                                    </button>
+                                </div>
+                                <div className="mt-3 text-xs text-zinc-400 bg-black/20 p-2 rounded">
+                                    <div className="font-semibold mb-1">✅ 자동 자재 포함:</div>
+                                    <div>- ㄷ형 세로바: {autoParts?.uVerticalBar ?? 0}개</div>
+                                    <div>- 각바: {autoParts?.cornerBar ?? 0}개</div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
 
@@ -585,7 +724,7 @@ export default function FieldNewPage() {
                         {/* Width */}
                         <div className="space-y-2">
                             <div className="text-sm text-zinc-400">가로 (mm) - 포인트 {widthPoints.length}개</div>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className={`grid gap-2 ${widthPoints.length > 3 ? "grid-cols-5" : "grid-cols-3"}`}>
                                 {widthPoints.map((v, i) => (
                                     <input key={`w-${i}`} type="number"
                                         className="bg-black/40 border border-white/10 rounded-lg p-3 text-center text-white"
@@ -600,7 +739,7 @@ export default function FieldNewPage() {
                         {/* Height */}
                         <div className="space-y-2">
                             <div className="text-sm text-zinc-400">세로 (mm) - 포인트 {heightPoints.length}개</div>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className={`grid gap-2 ${heightPoints.length > 3 ? "grid-cols-5" : "grid-cols-3"}`}>
                                 {heightPoints.map((v, i) => (
                                     <input key={`h-${i}`} type="number"
                                         className="bg-black/40 border border-white/10 rounded-lg p-3 text-center text-white"
@@ -610,6 +749,20 @@ export default function FieldNewPage() {
                                     />
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Confirmed Size Display */}
+                        <div className="p-4 border border-white/10 rounded-xl bg-blue-900/10 mt-2">
+                            <div className="font-bold text-blue-200 mb-1">📏 확정 사이즈</div>
+                            <div className="text-lg text-white">
+                                가로: <span className="font-mono font-bold text-yellow-400">{confirmedW || "-"}</span> /
+                                세로: <span className="font-mono font-bold text-yellow-400">{confirmedH || "-"}</span>
+                            </div>
+                            {door === "1W_SLIDING" && (
+                                <div className="mt-2 text-xs text-blue-300/70">
+                                    ※ 원슬라이딩 규칙: 가로=최대값 / 세로=최소값
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -768,10 +921,17 @@ export default function FieldNewPage() {
                         </div>
 
                         <textarea
-                            className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white"
+                            className="w-full h-24 bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white mb-2"
                             placeholder="현장 메모 (특이사항 등)"
                             value={memo}
                             onChange={(e) => setMemo(e.target.value)}
+                        />
+
+                        <div className="text-sm text-zinc-400 mb-1">고객 전송용 메시지 미리보기</div>
+                        <textarea
+                            value={customerMessage}
+                            readOnly
+                            className="w-full h-48 bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-xs text-zinc-300 font-mono"
                         />
 
                         <div className="grid gap-3">
