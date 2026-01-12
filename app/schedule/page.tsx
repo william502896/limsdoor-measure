@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import ManageLayout from "@/app/components/Manage/Layout/ManageLayout";
 import CalendarView from "@/app/components/Manage/CalendarView";
 import CustomerDetail from "@/app/components/Manage/CustomerDetail";
 
-export default function SchedulePage() {
+// Force dynamic rendering to support useSearchParams
+export const dynamic = 'force-dynamic';
+
+function ScheduleContent() {
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
     return (
@@ -21,5 +24,13 @@ export default function SchedulePage() {
                 <CalendarView onSelectCustomer={setSelectedCustomerId} />
             )}
         </ManageLayout>
+    );
+}
+
+export default function SchedulePage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center h-screen text-slate-500">로딩 중...</div>}>
+            <ScheduleContent />
+        </Suspense>
     );
 }
