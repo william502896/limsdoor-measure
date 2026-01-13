@@ -57,27 +57,82 @@ export default function ShopPreviewPage() {
     }
 
     // --- Drag Logic (Mouse + Touch) ---
+    // --- Interaction Logic (Drag + Pinch) ---
+    const pointersRef = useRef<Map<number, { x: number, y: number }>>(new Map());
+    const prevDistRef = useRef<number | null>(null);
+
     function onPointerDown(e: React.PointerEvent) {
         if (step !== "EDIT") return;
-        isDraggingRef.current = true;
-        startPosRef.current = { x: e.clientX, y: e.clientY };
-        startOffsetRef.current = { ...offset };
         e.currentTarget.setPointerCapture(e.pointerId);
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        // If 1 pointer, setup drag
+        if (pointersRef.current.size === 1) {
+            isDraggingRef.current = true;
+            startPosRef.current = { x: e.clientX, y: e.clientY };
+            startOffsetRef.current = { ...offset };
+        }
+        // If 2 pointers, setup pinch
+        else if (pointersRef.current.size === 2) {
+            isDraggingRef.current = false; // Stop dragging when pinching
+            const points = Array.from(pointersRef.current.values());
+            const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+            prevDistRef.current = dist;
+        }
     }
 
     function onPointerMove(e: React.PointerEvent) {
-        if (!isDraggingRef.current) return;
-        const dx = e.clientX - startPosRef.current.x;
-        const dy = e.clientY - startPosRef.current.y;
-        setOffset({
-            x: startOffsetRef.current.x + dx,
-            y: startOffsetRef.current.y + dy
-        });
+        if (step !== "EDIT" || !pointersRef.current.has(e.pointerId)) return;
+
+        // Update current pointer position
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        // PINCH (2 fingers)
+        if (pointersRef.current.size === 2) {
+            const points = Array.from(pointersRef.current.values());
+            const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+
+            if (prevDistRef.current !== null) {
+                const delta = dist - prevDistRef.current;
+                // Sensitivity factor for zoom
+                const zoomFactor = delta * 0.005;
+                setScale(prev => Math.max(0.1, Math.min(3.0, prev + zoomFactor)));
+            }
+            prevDistRef.current = dist;
+            return;
+        }
+
+        // DRAG (1 finger)
+        if (pointersRef.current.size === 1 && isDraggingRef.current) {
+            const dx = e.clientX - startPosRef.current.x;
+            const dy = e.clientY - startPosRef.current.y;
+            setOffset({
+                x: startOffsetRef.current.x + dx,
+                y: startOffsetRef.current.y + dy
+            });
+        }
     }
 
     function onPointerUp(e: React.PointerEvent) {
-        isDraggingRef.current = false;
+        pointersRef.current.delete(e.pointerId);
         e.currentTarget.releasePointerCapture(e.pointerId);
+
+        // Reset Pinch state
+        if (pointersRef.current.size < 2) {
+            prevDistRef.current = null;
+        }
+
+        // Reset Drag state if 0 pointers
+        if (pointersRef.current.size === 0) {
+            isDraggingRef.current = false;
+        }
+        // If 1 pointer remains, switch back to drag mode (re-init anchor)
+        else if (pointersRef.current.size === 1) {
+            const p = pointersRef.current.values().next().value;
+            isDraggingRef.current = true;
+            startPosRef.current = { x: p.x, y: p.y };
+            startOffsetRef.current = { ...offset };
+        }
     }
 
     async function handleSubmit() {
@@ -216,9 +271,9 @@ export default function ShopPreviewPage() {
                         <span className="text-xs font-medium text-zinc-400 w-8">크기</span>
                         <input
                             type="range"
-                            min={0.5}
-                            max={2.0}
-                            step={0.01}
+                            min={0.1}
+                            max={3.0}
+                            step={0.05}
                             value={scale}
                             onChange={(e) => setScale(Number(e.target.value))}
                             className="flex-1 h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
