@@ -290,7 +290,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
     const resaleDiscount = clampInt(input.discount?.resaleDiscountWon ?? 0);
 
     // Total calculation including glassCost & muntinCost
-    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + extrasWon + installWon;
+    // ✅ 시공비(installWon)는 별도로 더하지 않음 (기본단가에 포함된 것으로 간주)
+    const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + extrasWon;
     const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount + resaleDiscount);
 
     const totalWon = Math.max(0, totalBeforeDiscount - discountWon);
