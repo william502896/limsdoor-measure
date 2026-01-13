@@ -632,10 +632,11 @@ export default function FieldNewPage() {
     useEffect(() => {
         if (step !== "measure") return;
 
-        // ✅ TTS Noise Reduction: Only speak when ALL points are filled
-        // This prevents "Too small" warnings while user is typing "2" for "2300"
-        const isWidthFilled = widthPoints.every(v => v > 0);
-        const isHeightFilled = heightPoints.every(v => v > 0);
+        // ✅ TTS Noise Reduction: Only speak when ALL points are filled with REALISTIC values
+        // This prevents "Too small" warnings while user is typing "2", "23", "230" for "2300"
+        // 500mm is a safe minimum threshold (even small doors are usually > 500mm width)
+        const isWidthFilled = widthPoints.every(v => v >= 500);
+        const isHeightFilled = heightPoints.every(v => v >= 500);
         const isFullyFilled = isWidthFilled && isHeightFilled;
 
         if (!isFullyFilled) return;
