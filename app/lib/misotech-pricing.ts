@@ -1,5 +1,4 @@
-// Force rebuild
-import pricingData from './misotech-pricing.json';
+import { PRICING_DATA as pricingData } from './misotech-price-data';
 
 // --- Mappings & Constants ---
 

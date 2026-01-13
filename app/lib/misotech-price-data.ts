@@ -1,4 +1,4 @@
-{
+export const PRICING_DATA = {
     "meta": {
         "name": "MISO 대리점 단가표 (2024-04-01)",
         "vat_included": false,
@@ -1155,4 +1155,4 @@
             ]
         }
     ]
-}
+} as const;
