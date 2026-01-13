@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
     const FEATURE_USER_REGISTRATION = process.env.FEATURE_USER_REGISTRATION === "true";
     const BLOCKED_ROUTES = [
         "/signup", "/register", "/join", "/auth/signup",
-        "/admin/onboarding", "/company/create", "/invite",
+        "/company/create", "/invite",
         "/members", "/switch-company"
     ];
 
@@ -59,12 +59,18 @@ export async function middleware(request: NextRequest) {
         if (BLOCKED_ROUTES.some(route => path.startsWith(route))) {
             console.log(`[Middleware] Blocked Route (Feature Disabled): ${path}`);
             // If they are logged in, go to dashboard. If not, go to login.
-            return NextResponse.redirect(new URL(user ? '/manage' : '/login', request.url));
+            return NextResponse.redirect(new URL(user ? '/admin/measurements' : '/login', request.url));
         }
     }
 
     // 2. Define Path Categories
     // const path = request.nextUrl.pathname; // (Already defined)
+
+    // ✅ Enforce Info Architecture: Redirect /manage (Legacy) to /admin/measurements (New)
+    // Also redirect root / to admin if logged in
+    if (path === '/manage' || (user && path === '/')) {
+        return NextResponse.redirect(new URL('/admin/measurements', request.url));
+    }
 
     // Redirect /_ops (legacy) to /ops
     if (path.startsWith('/_ops')) {

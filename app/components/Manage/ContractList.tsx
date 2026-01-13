@@ -23,6 +23,13 @@ export default function ContractList() {
     const [dbOrders, setDbOrders] = useState<Order[]>([]);
     const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
 
+    // Debug logging
+    useEffect(() => {
+        console.log("📊 Contract List - dbOrders:", dbOrders.length);
+        console.log("📊 Contract List - orders:", orders.length);
+        console.log("📊 Active Tab:", activeTab);
+    }, [dbOrders, orders, activeTab]);
+
     // Fetch Real Data
     const fetchRealEstimates = useCallback(async () => {
         const { supabase } = await import("@/app/lib/supabase");
@@ -35,23 +42,40 @@ export default function ContractList() {
             .neq("status", "cancelled")
             .order("created_at", { ascending: false });
 
-        if (error || !schedules) {
-            console.error("Failed to fetch estimates:", error);
-            return;
+        if (error) {
+            console.error("Failed to fetch schedules:", error);
         }
 
-        // 2. Extract Customer IDs for Manual Join
-        const customerIds = Array.from(new Set(schedules.map((s: any) => s.customer_id).filter(Boolean)));
+        // 2. Fetch Measurements with Contracts
+        const { data: measurements, error: measError } = await supabase
+            .from("measurements")
+            .select("*")
+            .in("contract_status", ["QUOTE", "CONTRACT_CONFIRMED", "PRODUCING", "COMPLETED"])
+            .order("created_at", { ascending: false });
 
-        // 3. Fetch Related Customers
+        if (measError) {
+            console.error("Failed to fetch measurements:", measError);
+        }
+
+        console.log("✅ Fetched measurements with contracts:", measurements?.length || 0);
+        if (measurements && measurements.length > 0) {
+            console.log("📋 Sample measurement:", measurements[0]);
+        }
+
+        // 3. Combine customer IDs from both sources
+        const scheduleCustomerIds = (schedules || []).map((s: any) => s.customer_id).filter(Boolean);
+        const measurementCustomerNames = (measurements || []).map((m: any) => m.customer_name).filter(Boolean);
+        const allCustomerIds = Array.from(new Set([...scheduleCustomerIds]));
+
+        // 4. Fetch Related Customers from crm_customers
         const customerMap: Record<string, any> = {};
-        if (customerIds.length > 0) {
+        if (allCustomerIds.length > 0) {
             const { data: customersData, error: custError } = await supabase
                 .from("crm_customers")
                 .select("*")
-                .in("id", customerIds);
+                .in("id", allCustomerIds);
 
-            if (custError) console.error("Debug: Customer Fetch Error:", custError);
+            if (custError) console.error("Customer Fetch Error:", custError);
 
             if (customersData) {
                 customersData.forEach((c: any) => {
@@ -60,11 +84,12 @@ export default function ContractList() {
             }
         }
 
-        // 4. Map to Order/Customer Type
+        // 5. Map to Order/Customer Type
         const mappedOrders: Order[] = [];
         const mappedCustomers: Customer[] = [];
 
-        for (const s of schedules) {
+        // Process schedules
+        for (const s of schedules || []) {
             const c = s.customer_id ? customerMap[s.customer_id] : null;
 
             if (c) {
@@ -92,34 +117,76 @@ export default function ContractList() {
                     parsedItems = [s.items_json];
                 }
             } catch (e) {
-                console.error("JSON Parse Error:", e);
                 parsedItems = [];
             }
 
             mappedOrders.push({
                 id: s.id,
                 customerId: s.customer_id || "unknown",
-                // type property removed
                 status: (s.status?.toUpperCase() === 'MEASURED') ? 'MEASURED' : ((s.status?.toUpperCase() === 'SCHEDULED') ? 'INSTALL_SCHEDULED' : 'MEASURE_REQUESTED'),
                 title: s.title || "견적 문의",
                 items: parsedItems,
-                // totalPrice removed
                 estPrice: s.est_amount || 0,
                 finalPrice: 0,
                 createdAt: s.created_at,
-                // updatedAt removed
                 measureDate: s.visit_date,
                 installDate: s.install_date,
-                // partnerId removed
                 measureFiles: s.photos || [],
                 installFiles: [],
                 asHistory: [],
-
-                // Missing Required Fields
-                tenantId: "t_head", // Default fallback
+                tenantId: "t_head",
                 deposit: 0,
                 balance: 0,
                 paymentStatus: "Unpaid"
+            });
+        }
+
+        // Process measurements with contracts
+        for (const m of measurements || []) {
+            // Create virtual customer from measurement data
+            const custId = `meas_${m.id}`;
+            const custObj: Customer = {
+                id: custId,
+                name: m.customer_name || "고객",
+                phone: m.customer_phone || "",
+                address: m.customer_address || "",
+                memo: m.memo || "",
+                createdAt: m.created_at
+            };
+            if (!mappedCustomers.some(mc => mc.id === custObj.id)) {
+                mappedCustomers.push(custObj);
+            }
+
+            // Map payment_status to OrderStatus
+            let orderStatus: OrderStatus = "MEASURED";
+            if (m.contract_status === "PRODUCING") {
+                orderStatus = "PRODUCING";
+            } else if (m.contract_status === "CONTRACT_CONFIRMED") {
+                orderStatus = "CONTRACT_CONFIRMED";
+            } else if (m.contract_status === "COMPLETED") {
+                orderStatus = "COMPLETED";
+            }
+
+            console.log(`📌 Measurement ${m.id}: contract_status="${m.contract_status}" → orderStatus="${orderStatus}"`);
+
+            mappedOrders.push({
+                id: m.id,
+                customerId: custId,
+                status: orderStatus,
+                title: `${m.door_type || "도어"} 계약`,
+                items: [],
+                estPrice: m.total_price || m.material_price || 0,
+                finalPrice: m.total_price || 0,
+                createdAt: m.created_at,
+                measureDate: m.created_at,
+                installDate: m.install_date || null,
+                measureFiles: [],
+                installFiles: [],
+                asHistory: [],
+                tenantId: "t_head",
+                deposit: m.deposit_amount || 0,
+                balance: m.balance_amount || 0,
+                paymentStatus: m.payment_status === "FULLY_PAID" ? "Paid" : (m.payment_status === "DEPOSIT_PAID" ? "Partial" : "Unpaid")
             });
         }
 
@@ -128,9 +195,7 @@ export default function ContractList() {
     }, []);
 
     useEffect(() => {
-        if (activeTab === "estimate") {
-            fetchRealEstimates();
-        }
+        fetchRealEstimates(); // Load data for all tabs
     }, [activeTab, fetchRealEstimates]);
 
     const handleArchiveOrder = async (orderId: string, currentMemo: string = "") => {
@@ -167,7 +232,10 @@ export default function ContractList() {
         const allOrders = [...dbOrders, ...orders];
         const allCustomers = [...dbCustomers, ...customers];
 
-        return allOrders.filter(order => {
+        console.log("🔍 Filtering - Total orders:", allOrders.length);
+        console.log("🔍 Active Tab:", activeTab);
+
+        const filtered = allOrders.filter(order => {
             let matchesTab = false;
             if (activeTab === "estimate") {
                 matchesTab = ["AR_SELECTED", "MEASURE_REQUESTED", "MEASURED"].includes(order.status);
@@ -176,6 +244,8 @@ export default function ContractList() {
             } else if (activeTab === "completed") {
                 matchesTab = ["INSTALLED", "REFORM_COMPLETED", "COMPLETED", "AS_COMPLETED"].includes(order.status);
             }
+
+            console.log(`  Order ${order.id}: status="${order.status}", matchesTab=${matchesTab}`);
 
             if (!matchesTab) return false;
 
@@ -190,7 +260,18 @@ export default function ContractList() {
 
             return true;
         }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        console.log("✅ Filtered result:", filtered.length);
+        return filtered;
     }, [orders, customers, dbOrders, dbCustomers, activeTab, searchTerm]);
+
+    //  Debug: Monitor filteredOrders
+    useEffect(() => {
+        console.log("🎨 UI Update - filteredOrders.length:", filteredOrders.length);
+        if (filteredOrders.length > 0) {
+            console.log("🎨 First order:", filteredOrders[0]);
+        }
+    }, [filteredOrders]);
 
     const getStatusBadge = (status: OrderStatus) => {
         switch (status) {
@@ -226,7 +307,13 @@ export default function ContractList() {
     // Process Single Order
     const handleProcessOrder = useCallback((e: React.MouseEvent, orderId: string) => {
         e.stopPropagation();
-        router.push(`/admin/purchase-order/new?orderId=${orderId}`);
+        // Check if this is a measurement-based contract (ID starts with meas_ customer ID or is direct measurement ID)
+        const isMeasurement = orderId.length === 36; // UUID format = measurement
+        if (isMeasurement) {
+            router.push(`/admin/purchase-order/new?measurementId=${orderId}`);
+        } else {
+            router.push(`/admin/purchase-order/new?orderId=${orderId}`);
+        }
     }, [router]);
 
     // Batch Process
@@ -331,7 +418,8 @@ export default function ContractList() {
                 ) : (
                     <div className="space-y-4">
                         {filteredOrders.map(order => {
-                            const customer = dbCustomers.find(c => c.id === order.customerId);
+                            const allCustomers = [...dbCustomers, ...customers];
+                            const customer = allCustomers.find(c => c.id === order.customerId);
                             const isSelected = selectedIds.has(order.id);
 
                             return (
@@ -384,6 +472,55 @@ export default function ContractList() {
                                                 </div>
                                             )}
                                             <div className="flex items-center gap-2 mt-auto">
+                                                {/* 입금 기록 버튼 */}
+                                                {order.paymentStatus !== "Paid" && (
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const paymentType = confirm("자재비를 입금하셨나요?\n\n예 = 자재비\n아니오 = 잔금") ? "material" : "balance";
+                                                            const label = paymentType === "material" ? "자재비" : "잔금";
+                                                            const amountStr = prompt(`${label} 입금액을 입력하세요:`);
+                                                            if (!amountStr) return;
+
+                                                            const amount = Number(amountStr);
+                                                            if (isNaN(amount) || amount <= 0) {
+                                                                alert("올바른 금액을 입력하세요.");
+                                                                return;
+                                                            }
+
+                                                            try {
+                                                                const payload: any = {
+                                                                    id: order.id,
+                                                                    payment_type: paymentType === "material" ? "deposit" : "balance"
+                                                                };
+
+                                                                if (paymentType === "material") {
+                                                                    payload.deposit_amount = (order.deposit || 0) + amount;
+                                                                } else {
+                                                                    payload.balance_amount = amount;
+                                                                }
+
+                                                                const res = await fetch('/api/measurements/update-payment', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify(payload)
+                                                                });
+
+                                                                if (!res.ok) throw new Error('입금 기록 실패');
+
+                                                                const result = await res.json();
+                                                                alert(`✅ 입금이 기록되었습니다!\n상태: ${result.payment_status}\n계약: ${result.contract_status}`);
+                                                                fetchRealEstimates();
+                                                            } catch (e: any) {
+                                                                alert(`❌ 오류: ${e.message}`);
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                                                    >
+                                                        💰 입금 기록
+                                                    </button>
+                                                )}
+
                                                 <button
                                                     onClick={(e) => handleProcessOrder(e, order.id)}
                                                     className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-bold transition flex items-center gap-1"

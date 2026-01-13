@@ -15,7 +15,8 @@ export type FrameColor =
     | "DARK_SILVER"
     | "CHAMPAGNE_GOLD"
     | "METAL_BLACK"
-    | "BLACK";
+    | "BLACK"
+    | "DEEP_GRAY";
 
 export type GlassBase = "CLEAR_TEMPERED"; // 일단 기준은 투명강화
 
@@ -33,7 +34,8 @@ export type GlassDesign = {
 
 export type DiscountInput = {
     measurerDiscountWon: number;  // 실측자 할인
-    promoDiscountWon: number;     // 행사 제품 할인
+    promoDiscountWon: number;     // 행사/이벤트 할인
+    resaleDiscountWon: number;    // 재판매 할인 (New)
 };
 
 export type PricingInput = {
@@ -50,6 +52,9 @@ export type PricingInput = {
     // ✅ 유리 종류 추가금 (외부에서 계산해서 주입)
     glassAddWon?: number;
 
+    // ✅ 프레임 색상 추가금 (외부 주입)
+    frameAddWon?: number;
+
     // ✅ 간살 (별도 수량)
     muntinQty?: number;
 
@@ -57,8 +62,9 @@ export type PricingInput = {
     extras?: {
         demolition: boolean;
         carpentry: boolean;
+        carpentryMaterialWon?: number; // ✅ 목공 자재비 (실비)
         moving: boolean;
-        movingFloor: number;
+        movingFloor?: number; // ✅ 2~6층
     };
 
     // 시공비(고객에게는 별도 표기)
@@ -189,14 +195,28 @@ function calcGlassDesignWon(door: DoorKind, g?: GlassDesign) {
 }
 
 // HELPER for Extras
+// HELPER for Extras
 function calcExtrasWon(e?: PricingInput["extras"]) {
     if (!e) return 0;
     let cost = 0;
-    if (e.demolition) cost += 50000;
-    if (e.carpentry) cost += 100000;
-    if (e.moving) {
+
+    // 철거 15만
+    if (e.demolition) cost += 150000;
+
+    // 목공: 시공 5만 + 자재비
+    if (e.carpentry) {
         cost += 50000;
+        cost += (e.carpentryMaterialWon ?? 0);
     }
+
+    // 양중비 2~6층
+    const floor = e.movingFloor ?? 0;
+    if (floor >= 2) {
+        // 2층=1만, 3층=2만 ...
+        const f = Math.min(6, floor);
+        cost += (f - 1) * 10000;
+    }
+
     return cost;
 }
 
@@ -258,7 +278,8 @@ export function calcPricing(input: PricingInput): PricingOutput {
 
     const baseWon = rule.basePrice;
     const sizeSurchargeWon = calcSizeSurcharge(input.door, w, h);
-    const frameSurchargeWon = calcFrameSurcharge(input.door, input.frameFinish, input.frameColor);
+    // ✅ 외부 주입이 있으면 우선 사용 (UI 정책 연동)
+    const frameSurchargeWon = input.frameAddWon ?? calcFrameSurcharge(input.door, input.frameFinish, input.frameColor);
     const glassDesignWon = calcGlassDesignWon(input.door, input.glassDesign);
     const glassCost = clampInt(input.glassAddWon ?? 0);
     const muntinCost = (input.muntinQty ?? 0) * 20000;
@@ -266,10 +287,11 @@ export function calcPricing(input: PricingInput): PricingOutput {
 
     const measurerDiscount = clampInt(input.discount?.measurerDiscountWon ?? 0);
     const promoDiscount = clampInt(input.discount?.promoDiscountWon ?? 0);
+    const resaleDiscount = clampInt(input.discount?.resaleDiscountWon ?? 0);
 
     // Total calculation including glassCost & muntinCost
     const totalBeforeDiscount = baseWon + sizeSurchargeWon + frameSurchargeWon + glassDesignWon + glassCost + muntinCost + extrasWon + installWon;
-    const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount);
+    const discountWon = Math.min(totalBeforeDiscount, measurerDiscount + promoDiscount + resaleDiscount);
 
     const totalWon = Math.max(0, totalBeforeDiscount - discountWon);
 

@@ -1,0 +1,1126 @@
+{
+    "products": [
+        {
+            "product_type": "1S_MANUAL",
+            "title": "1S 도어(수동/원슬라이딩·여닫이 1S)",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 270000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 290000
+                        },
+                        {
+                            "width_mm": 1450,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 380000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(샴페인골드 기본 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 280000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 300000
+                        },
+                        {
+                            "width_mm": 1450,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 390000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "FIX",
+            "title": "FIX 도어",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 800,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 190000
+                        },
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 210000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 280000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(샴페인골드 기본 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 800,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 200000
+                        },
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 220000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 290000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "1S_AUTO",
+            "title": "1S 자동문",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 670000
+                        },
+                        {
+                            "width_mm": 1250,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 700000
+                        },
+                        {
+                            "width_mm": 1350,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 780000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(샴페인골드 기본 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 690000
+                        },
+                        {
+                            "width_mm": 1250,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 720000
+                        },
+                        {
+                            "width_mm": 1350,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 800000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "3T_MANUAL",
+            "title": "3연동(수동) 18바",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 400000
+                        },
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 430000
+                        },
+                        {
+                            "width_mm": 1700,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 530000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(샴페인골드 기본 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 410000
+                        },
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 450000
+                        },
+                        {
+                            "width_mm": 1700,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 540000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "3T_AUTO",
+            "title": "3연동 자동문",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 880000
+                        },
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 910000
+                        },
+                        {
+                            "width_mm": 1700,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 1000000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(샴페인골드 기본 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 880000
+                        },
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "SATIN",
+                            "price": 910000
+                        },
+                        {
+                            "width_mm": 1700,
+                            "height_mm": 2400,
+                            "glass_group": "WIRE_MESH",
+                            "price": 1000000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "SEMI_SWING_ASYM",
+            "title": "반자동 스윙도어(비대칭/손잡이 1개)",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1200,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 490000
+                        },
+                        {
+                            "width_mm": 1400,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 520000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(스윙/호페는 아노 기본 적용 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1200,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 520000
+                        },
+                        {
+                            "width_mm": 1400,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 550000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "SEMI_SWING_SYM",
+            "title": "반자동 스윙도어(정대칭/손잡이 2개)",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 560000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(스윙/호페는 아노 기본 적용 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1500,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 590000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "SEMI_SWING_OUTER",
+            "title": "반자동 외도어",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장",
+                    "size_prices": [
+                        {
+                            "width_mm": 1000,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 360000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징",
+                    "size_prices": [
+                        {
+                            "width_mm": 1000,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 380000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "HOPE_ASYM",
+            "title": "호페 여닫이도어(비대칭)",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장(화이트 기본 / 블랙 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 470000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 500000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징(호페는 아노 기본 적용 / 색상 변경 옵션)",
+                    "size_prices": [
+                        {
+                            "width_mm": 1100,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 500000
+                        },
+                        {
+                            "width_mm": 1300,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 530000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "product_type": "HOPE_OUTER",
+            "title": "호페 외도어",
+            "base_height_mm": 2400,
+            "variants": [
+                {
+                    "coating": "FLUORO",
+                    "coating_label": "불소도장",
+                    "size_prices": [
+                        {
+                            "width_mm": 1000,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 390000
+                        }
+                    ]
+                },
+                {
+                    "coating": "ANOD",
+                    "coating_label": "아노다이징",
+                    "size_prices": [
+                        {
+                            "width_mm": 1000,
+                            "height_mm": 2400,
+                            "glass_group": "CLEAR_BRONZE_AQUA",
+                            "price": 420000
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "price_addons": [
+        {
+            "category": "RULE",
+            "code": "HEIGHT_OVER_2400",
+            "label": "높이 2400 이상",
+            "unit": "once",
+            "price": 10000,
+            "meta": {
+                "apply_when": {
+                    "height_mm_gt": 2400
+                }
+            },
+            "is_active": true
+        },
+        {
+            "category": "RULE",
+            "code": "VERTICAL_DIVISION",
+            "label": "세로분할",
+            "unit": "once",
+            "price": 10000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "RULE",
+            "code": "FLUORO_COLOR_BLACK",
+            "label": "불소도장 색상 변경: 블랙",
+            "unit": "once",
+            "price": 70000,
+            "meta": {
+                "apply_when": {
+                    "coating": "FLUORO",
+                    "color_to": "BLACK"
+                }
+            },
+            "is_active": true
+        },
+        {
+            "category": "RULE",
+            "code": "ANOD_COLOR_CHANGE",
+            "label": "아노다이징 색상 변경",
+            "unit": "once",
+            "price": 80000,
+            "meta": {
+                "apply_when": {
+                    "coating": "ANOD",
+                    "color_changed": true
+                }
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "MIDDLE_BAR_22_FLUORO_M",
+            "label": "중간바_22 (불소) M",
+            "unit": "m",
+            "price": 6700,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "MIDDLE_BAR_22_ANOD_M",
+            "label": "중간바_22 (아노) M",
+            "unit": "m",
+            "price": 7100,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "ADHESIVE_BAR_22_FLUORO_2P5M",
+            "label": "접착바_22 (불소) 2.5M",
+            "unit": "ea",
+            "price": 6500,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "ADHESIVE_BAR_22_ANOD_2P5M",
+            "label": "접착바_22 (아노) 2.5M",
+            "unit": "ea",
+            "price": 7000,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_10x20_FLUORO",
+            "label": "이틈새 10×20 (불소)",
+            "unit": "ea",
+            "price": 5000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_10x20_ANOD",
+            "label": "이틈새 10×20 (아노)",
+            "unit": "ea",
+            "price": 5500,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_20x30_FLUORO",
+            "label": "이틈새 20×30 (불소)",
+            "unit": "ea",
+            "price": 9000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_20x30_ANOD",
+            "label": "이틈새 20×30 (아노)",
+            "unit": "ea",
+            "price": 9500,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_COVER_LARGE",
+            "label": "이틈새 커버 大",
+            "unit": "ea",
+            "price": 4000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "GAP_COVER_SMALL",
+            "label": "이틈새 커버 小",
+            "unit": "ea",
+            "price": 3000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FRAME_1S_SIDE_FLUORO_M",
+            "label": "1S 측면문틀 (불소) M",
+            "unit": "m",
+            "price": 5000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FRAME_1S_SIDE_ANOD_M",
+            "label": "1S 측면문틀 (아노) M",
+            "unit": "m",
+            "price": 5500,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "MIDDLE_BAR_18_FLUORO_M",
+            "label": "중간바_18 (불소) M",
+            "unit": "m",
+            "price": 5000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "MIDDLE_BAR_18_ANOD_M",
+            "label": "중간바_18 (아노) M",
+            "unit": "m",
+            "price": 5500,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "ADHESIVE_BAR_18_FLUORO_2P5M",
+            "label": "접착바_18 (불소) 2.5M",
+            "unit": "ea",
+            "price": 5000,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "ADHESIVE_BAR_18_ANOD_2P5M",
+            "label": "접착바_18 (아노) 2.5M",
+            "unit": "ea",
+            "price": 5500,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FINISH_3J_FLUORO",
+            "label": "3전 마감재(2.5M) 30×10 (불소)",
+            "unit": "ea",
+            "price": 3500,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FINISH_3J_ANOD",
+            "label": "3전 마감재(2.5M) 30×10 (아노)",
+            "unit": "ea",
+            "price": 4500,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FINISH_6J_FLUORO",
+            "label": "6전 마감재(2.5M) 60×2.5 (불소)",
+            "unit": "ea",
+            "price": 12000,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "FINISH_6J_ANOD",
+            "label": "6전 마감재(2.5M) 60×2.5 (아노)",
+            "unit": "ea",
+            "price": 13000,
+            "meta": {
+                "length_m": 2.5
+            },
+            "is_active": true
+        },
+        {
+            "category": "HARDWARE",
+            "code": "DAMPER_SEMI_AUTO",
+            "label": "반자동댐퍼",
+            "unit": "ea",
+            "price": 20000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HARDWARE",
+            "code": "TOP_SENSOR",
+            "label": "상부센서",
+            "unit": "ea",
+            "price": 30000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HARDWARE",
+            "code": "WIRELESS_SWITCH",
+            "label": "무선스위치",
+            "unit": "ea",
+            "price": 22000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HARDWARE",
+            "code": "TDU_1S_AUTO",
+            "label": "자동 1S TDU",
+            "unit": "ea",
+            "price": 260000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HARDWARE",
+            "code": "TDU_3T_AUTO",
+            "label": "자동 3T TDU",
+            "unit": "ea",
+            "price": 290000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "SLIDING",
+            "code": "PIVOT",
+            "label": "피봇",
+            "unit": "ea",
+            "price": 600,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "SLIDING",
+            "code": "SLIDING_HW_SET",
+            "label": "연동철물 세트(공급가)",
+            "unit": "set",
+            "price": 0,
+            "meta": {
+                "ranges": [
+                    {
+                        "max_width_mm": 1500,
+                        "price": 29000
+                    },
+                    {
+                        "max_width_mm": 1700,
+                        "price": 31000
+                    },
+                    {
+                        "max_width_mm": 1900,
+                        "price": 33000
+                    }
+                ],
+                "over_1900_extra": {
+                    "per_200mm": 2000
+                }
+            },
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HANDLE_3T_RANGE",
+            "label": "3연동 손잡이(폭 구간)",
+            "unit": "set",
+            "price": 0,
+            "meta": {
+                "ranges": [
+                    {
+                        "max_width_mm": 1400,
+                        "price": 25000
+                    },
+                    {
+                        "max_width_mm": 1700,
+                        "price": 30000
+                    },
+                    {
+                        "max_width_mm": 2000,
+                        "price": 35000
+                    }
+                ]
+            },
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HANDLE_NEW_600",
+            "label": "손잡이 신형(600)",
+            "unit": "ea",
+            "price": 35000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HANDLE_NEW_800",
+            "label": "손잡이 신형(800)",
+            "unit": "ea",
+            "price": 45000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HANDLE_HALF_MOON",
+            "label": "손잡이 반달(원형)",
+            "unit": "ea",
+            "price": 30000,
+            "meta": {
+                "note": "아노다이징 반달 구매불가(표기)"
+            },
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HOPE_HANDLE_GERMAN",
+            "label": "호페 손잡이(독일)",
+            "unit": "ea",
+            "price": 60000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "HANDLE",
+            "code": "HOPE_HANDLE_CHINA",
+            "label": "호페 손잡이(중국)",
+            "unit": "ea",
+            "price": 40000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_3T_FIX_SET_FLUORO",
+            "label": "3연동+픽스 기둥바 세트(불소)",
+            "unit": "set",
+            "price": 65800,
+            "meta": {
+                "size": "128×49"
+            },
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_3T_FIX_SET_ANOD",
+            "label": "3연동+픽스 기둥바 세트(아노)",
+            "unit": "set",
+            "price": 70000,
+            "meta": {
+                "size": "128×49"
+            },
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_1S_1F_SET_FLUORO",
+            "label": "1S+1F 기둥바 세트(불소)",
+            "unit": "set",
+            "price": 40800,
+            "meta": {
+                "size": "50×47"
+            },
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_1S_1F_SET_ANOD",
+            "label": "1S+1F 기둥바 세트(아노)",
+            "unit": "set",
+            "price": 43400,
+            "meta": {
+                "size": "50×47"
+            },
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "HBAR_FLUORO",
+            "label": "H 바(불소) 개당",
+            "unit": "ea",
+            "price": 10000,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "MATERIAL",
+            "code": "HBAR_ANOD",
+            "label": "H 바(아노) 개당",
+            "unit": "ea",
+            "price": 10500,
+            "meta": {},
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_2S_SET_FLUORO",
+            "label": "2S 기둥바 세트(불소)",
+            "unit": "set",
+            "price": 59200,
+            "meta": {
+                "size": "88×49"
+            },
+            "is_active": true
+        },
+        {
+            "category": "PILLAR",
+            "code": "PILLAR_2S_SET_ANOD",
+            "label": "2S 기둥바 세트(아노)",
+            "unit": "set",
+            "price": 61800,
+            "meta": {
+                "size": "88×49"
+            },
+            "is_active": true
+        },
+        {
+            "category": "POMAX",
+            "code": "POMAX_ARCH_PRICE_TABLE",
+            "label": "포맥스 아치형(3T) 단가표",
+            "unit": "table",
+            "price": 0,
+            "meta": {
+                "notes": [
+                    "화이트(현대 보닥 S216) 필름 기준",
+                    "별도 필름 요청: 세트당 +10,000",
+                    "세트가격에 포장비 포함(배송비 착불)",
+                    "특이 디자인은 선견적"
+                ],
+                "tables": [
+                    {
+                        "name": "1S 상부아치(여닫이 외도어) - 가운데두께 80mm",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1000,
+                                "price": 80000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1300,
+                                "price": 100000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1450,
+                                "price": 120000,
+                                "qty": "2장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "여닫이 양개 상부아치(반자동/호페) - 가운데두께 60mm",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1100,
+                                "price": 70000,
+                                "qty": "총4장"
+                            },
+                            {
+                                "max_width_mm": 1300,
+                                "price": 80000,
+                                "qty": "총4장"
+                            },
+                            {
+                                "max_width_mm": 1500,
+                                "price": 100000,
+                                "qty": "총4장"
+                            },
+                            {
+                                "max_width_mm": 1700,
+                                "price": 120000,
+                                "qty": "총4장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "3연동 상부아치 - 가운데두께 30mm",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1100,
+                                "price": 60000,
+                                "qty": "총6장"
+                            },
+                            {
+                                "max_width_mm": 1300,
+                                "price": 80000,
+                                "qty": "총6장"
+                            },
+                            {
+                                "max_width_mm": 1500,
+                                "price": 100000,
+                                "qty": "총6장"
+                            },
+                            {
+                                "max_width_mm": 2000,
+                                "price": 120000,
+                                "qty": "총6장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "하부고시판(높이 500 기준)",
+                        "ranges": [
+                            {
+                                "max_width_mm": 800,
+                                "price": 60000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1000,
+                                "price": 90000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1200,
+                                "price": 120000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1450,
+                                "price": 150000,
+                                "qty": "2장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "모서리아치",
+                        "ranges": [
+                            {
+                                "max_width_mm": 300,
+                                "price": 25000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 700,
+                                "price": 35000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1000,
+                                "price": 45000,
+                                "qty": "2장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "얇은 띠 아치(폭22mm)",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1000,
+                                "price": 70000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1300,
+                                "price": 90000,
+                                "qty": "2장"
+                            },
+                            {
+                                "max_width_mm": 1450,
+                                "price": 110000,
+                                "qty": "2장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "접착바(디바이딩 띠)",
+                        "ranges": [
+                            {
+                                "fixed": true,
+                                "spec": "23×2400",
+                                "price": 4500,
+                                "qty": "장당"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "세로 큰 아치(가운데두께 100mm, 최대 1200×2400)",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1200,
+                                "price": 220000,
+                                "qty": "2장"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "세로 얇은 아치 띠(폭22mm, 가운데두께 100mm, 최대 1200×2400)",
+                        "ranges": [
+                            {
+                                "max_width_mm": 1200,
+                                "price": 210000,
+                                "qty": "2장"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "is_active": true
+        }
+    ]
+}

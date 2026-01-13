@@ -150,7 +150,7 @@ export default function PurchaseOrderListPage() {
                                             </button>
                                         )}
                                         <button
-                                            onClick={() => window.open(`/admin/purchase-order/new?orderId=${po.schedule_id}`, '_blank')}
+                                            onClick={() => window.open(`/admin/purchase-order/new?purchaseOrderId=${po.id}`, '_blank')}
                                             className="px-3 py-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 font-medium text-sm transition"
                                         >
                                             상세/수정

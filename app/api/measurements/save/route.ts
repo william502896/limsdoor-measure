@@ -57,12 +57,23 @@ export async function POST(req: Request) {
                 options_json,
                 extras_json,
 
+                // ✅ 확정 가격 필드 (목록 표시용)
+                total_price: pricing_json?.totalWon ?? null,
+                material_price: pricing_json?.materialWon ?? null,
+                install_price: pricing_json?.installWon ?? null,
+
                 // Trust Check (New)
                 trust_check,
 
+                category: "DOOR",
+                detail: "Field App Entry", // ✅ Fallback for legacy 'detail' column
+                glass: body?.door_detail?.glassType ?? "Standard", // ✅ Fallback for legacy 'glass' column
+                design: body?.door_detail?.glassDesign ?? "Basic", // ✅ Fallback for legacy 'design' column
                 memo: body?.memo ?? null,
                 customer_message: body?.customer_message ?? null,
                 status: body?.status ?? "DRAFT",
+                install_date: body?.install_date ?? body?.installDate ?? null,
+                install_time: body?.install_time ?? body?.installTime ?? null,
             })
             .select("id")
             .single();

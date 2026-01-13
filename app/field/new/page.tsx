@@ -2,7 +2,53 @@
 
 import { useMemo, useState, useEffect } from "react";
 import GlassDesignOptions from "@/app/components/GlassDesignOptions";
-import { calcPricing, type DoorKind, type GlassDesign, type FrameFinish, type FrameColor } from "@/app/lib/pricing";
+import { calcPricing, type DoorKind, type GlassDesign } from "@/app/lib/pricing";
+
+// Frame Logic Definitions
+type FrameFinish = "FLUORO" | "ANOD"; // 불소 / 아노다이징
+type FrameColor = "WHITE" | "BLACK" | "DEEP_GRAY" | "CHAMPAGNE_GOLD";
+
+const COLOR_LABEL: Record<FrameColor, string> = {
+    WHITE: "화이트",
+    BLACK: "블랙",
+    DEEP_GRAY: "딥그레이",
+    CHAMPAGNE_GOLD: "샴페인골드",
+};
+
+function getFramePolicy(doorKind: DoorKind, finish: FrameFinish) {
+    // ✅ 스윙/호폐는 아노다이징 강제 + 기본 블랙
+    const isSwingOrHope = doorKind === "SWING_1" || doorKind === "SWING_2" || doorKind === "HOPE_1" || doorKind === "HOPE_2";
+
+    if (isSwingOrHope) {
+        return {
+            forcedFinish: "ANOD" as FrameFinish,
+            allowedColors: ["BLACK", "WHITE", "DEEP_GRAY", "CHAMPAGNE_GOLD"] as FrameColor[],
+            baseColor: "BLACK" as FrameColor,
+            extraByColor: (color: FrameColor) => (color === "BLACK" ? 0 : 80000),
+            note: "스윙/호폐 도어는 아노다이징 기본 + 블랙 기본입니다. 색상 변경 시 8만원 추가됩니다.",
+        };
+    }
+
+    // ✅ 불소도장: 화이트/블랙만, 블랙은 7만원 추가
+    if (finish === "FLUORO") {
+        return {
+            forcedFinish: null as FrameFinish | null,
+            allowedColors: ["WHITE", "BLACK"] as FrameColor[],
+            baseColor: "WHITE" as FrameColor,
+            extraByColor: (color: FrameColor) => (color === "BLACK" ? 70000 : 0),
+            note: "불소도장은 화이트/블랙만 가능하며, 블랙 변경 시 7만원 추가됩니다.",
+        };
+    }
+
+    // ✅ 아노다이징: 4색 가능, (기본색=화이트 추천) 변경 시 8만원 추가
+    return {
+        forcedFinish: null as FrameFinish | null,
+        allowedColors: ["DEEP_GRAY", "WHITE", "CHAMPAGNE_GOLD", "BLACK"] as FrameColor[],
+        baseColor: "WHITE" as FrameColor,
+        extraByColor: (color: FrameColor) => (color === "WHITE" ? 0 : 80000),
+        note: "아노다이징은 딥그레이/화이트/샴페인골드/블랙 가능하며, 색상 변경 시 8만원 추가됩니다.",
+    };
+}
 
 function cx(...a: (string | false | undefined)[]) {
     return a.filter(Boolean).join(" ");
@@ -138,6 +184,51 @@ function fmt(n: any) {
     return Number.isFinite(num) ? `${num}` : "-";
 }
 
+
+const INSTALL_PHOTOS_URL = "https://sites.google.com/view/limsdoor/%ED%99%88";
+
+function normalizeHttps(url: string) {
+    const u = (url || "").trim();
+    if (!u) return "";
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    return `https://${u}`;
+}
+
+function isSafeUrl(url: string) {
+    try {
+        const u = new URL(url);
+        return u.protocol === "https:"; // https만 허용
+    } catch {
+        return false;
+    }
+}
+
+function InstallPhotosSection() {
+    const url = normalizeHttps(INSTALL_PHOTOS_URL);
+
+    return (
+        <button
+            type="button"
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+            className="w-full mt-4 p-4 rounded-xl border border-white/10 bg-white/5 active:bg-white/10 transition-colors text-left flex items-center justify-between group"
+        >
+            <div className="flex flex-col gap-1">
+                <div className="font-bold flex items-center gap-2">
+                    <span>📸 시공 사진 보기 (갤러리)</span>
+                </div>
+                <div className="text-xs text-zinc-400 font-normal">
+                    현장에서 고객에게 시공 사례를 바로 보여주세요.
+                </div>
+            </div>
+            <div className="text-zinc-500 group-hover:text-white transition-colors">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+            </div>
+        </button>
+    );
+}
+
 function joinPoints(arr: any[]) {
     if (!Array.isArray(arr)) return "-";
     const cleaned = arr.map((v) => (v === null || v === undefined || v === "" ? "-" : String(v)));
@@ -171,6 +262,8 @@ export function buildCustomerMessage(args: {
     requestDate?: string;            // 시공요청일
     requestTime?: string;            // 시공시간
     memo?: string;
+    discounts?: { event: number; measurer: number; resale: number }; // ✅ Added
+    extras?: { demolition: boolean; carpentry: boolean; carpentryMaterialWon: number; movingFloor: number }; // ✅ Added
 }) {
     const c = args.customer;
 
@@ -185,6 +278,14 @@ export function buildCustomerMessage(args: {
         : "- 시공 일정: 추후 확정";
 
     const memoText = args.memo?.trim() ? `- 현장 메모: ${args.memo.trim()}` : "";
+
+    // ✅ Discount Calculation
+    const dEvent = args.discounts?.event ?? 0;
+    const dMeasurer = args.discounts?.measurer ?? 0;
+    const dResale = args.discounts?.resale ?? 0;
+    const totalDiscount = dEvent + dMeasurer + dResale;
+    // 역산: 보여지는 자재비는 이미 할인이 빠진 금액이므로, 정상가는 합산해야 함
+    const rawMaterialPrice = args.materialPrice + totalDiscount;
 
     return [
         "[림스도어 현장실측/견적 안내]",
@@ -205,10 +306,28 @@ export function buildCustomerMessage(args: {
         `- 세로 포인트: ${joinPoints(args.heightPoints)} (mm)`,
         "",
         "💰 금액",
-        `- 자재비: ${Number(args.materialPrice).toLocaleString()}원`,
+        `- 자재비(정상가): ${Number(rawMaterialPrice).toLocaleString()}원`,
+        dEvent > 0 ? `- 이벤트 할인: -${Number(dEvent).toLocaleString()}원` : "",
+        dMeasurer > 0 ? `- 실측자 할인: -${Number(dMeasurer).toLocaleString()}원` : "",
+        dResale > 0 ? `- 재판매 할인: -${Number(dResale).toLocaleString()}원` : "",
         `- 시공비: ${Number(args.installPrice).toLocaleString()}원`,
         `- 총 합계: ${Number(args.totalPrice).toLocaleString()}원`,
         "",
+        // ✅ Extras Section
+        ...(args.extras?.demolition || args.extras?.carpentry || (args.extras?.movingFloor ?? 0) >= 2
+            ? [
+                "🔧 추가 작업",
+                args.extras?.demolition ? "- 기존 중문 철거: 150,000원" : "",
+                args.extras?.carpentry
+                    ? `- 목공 마감 작업: ${(50000 + (args.extras?.carpentryMaterialWon ?? 0)).toLocaleString()}원 (시공 5만 + 자재비 ${(args.extras?.carpentryMaterialWon ?? 0).toLocaleString()}원)`
+                    : "",
+                (args.extras?.movingFloor ?? 0) >= 2
+                    ? `- 짐 양중비(계단): ${(((args.extras?.movingFloor ?? 1) - 1) * 10000).toLocaleString()}원 (${args.extras?.movingFloor}층)`
+                    : "",
+                ""
+            ].filter(line => line !== "")
+            : []
+        ),
         scheduleText,
         memoText,
         memoText ? "" : "",
@@ -371,10 +490,12 @@ export default function FieldNewPage() {
     // Extras
     const [measurerDiscountWon, setMeasurerDiscountWon] = useState<number>(0);
     const [promoDiscountWon, setPromoDiscountWon] = useState<number>(0);
+    const [resaleDiscountWon, setResaleDiscountWon] = useState<number>(0);
     const [extraDemolition, setExtraDemolition] = useState(false);
     const [extraCarpentry, setExtraCarpentry] = useState(false);
+    const [carpentryMaterialWon, setCarpentryMaterialWon] = useState(0); // ✅ 목공 자재비
     const [extraMoving, setExtraMoving] = useState(false);
-    const [movingFloor, setMovingFloor] = useState<number>(0);
+    const [movingFloor, setMovingFloor] = useState(1); // ✅ 1층(없음) ~ 6층
     const [isNewApartment, setIsNewApartment] = useState(false);
 
     // Trust
@@ -429,30 +550,49 @@ export default function FieldNewPage() {
         return { uVerticalBar: 0, cornerBar: 2 };
     }, [door, oneSlideMount]);
 
+    // ✅ Frame Policy Logic
+    const policy = useMemo(() => getFramePolicy(door, frameFinish), [door, frameFinish]);
+
+    // Enforce Policy
+    useEffect(() => {
+        if (policy.forcedFinish && frameFinish !== policy.forcedFinish) {
+            setFrameFinish(policy.forcedFinish);
+        }
+        if (!policy.allowedColors.includes(frameColor)) {
+            setFrameColor(policy.baseColor);
+        }
+    }, [policy, frameFinish, frameColor]);
+
+    const frameColorExtra = useMemo(() => policy.extraByColor(frameColor), [policy, frameColor]);
+
     // Pricing
     const pricing = useMemo(() => {
         return calcPricing({
             widthMm, heightMm,
-            door, frameFinish, glassDesign,
+            door, frameFinish, frameColor, // ✅ Passed frameColor
+            glassDesign,
             // discount Input
             discount: {
                 measurerDiscountWon,
                 promoDiscountWon,
+                resaleDiscountWon,
             },
             // extras Input
             extras: {
                 demolition: extraDemolition,
                 carpentry: extraCarpentry,
+                carpentryMaterialWon,
                 moving: extraMoving,
                 movingFloor,
             },
             muntinQty,
             glassAddWon: getGlassAddPrice(glassType),
+            frameAddWon: frameColorExtra, // ✅ Added
         });
-    }, [widthMm, heightMm, door, frameFinish, glassDesign,
-        measurerDiscountWon, promoDiscountWon,
-        extraDemolition, extraCarpentry, extraMoving, movingFloor,
-        muntinQty, glassType
+    }, [widthMm, heightMm, door, frameFinish, frameColor, glassDesign,
+        measurerDiscountWon, promoDiscountWon, resaleDiscountWon,
+        extraDemolition, extraCarpentry, carpentryMaterialWon, extraMoving, movingFloor,
+        muntinQty, glassType, frameColorExtra
     ]);
 
     // Validation
@@ -492,13 +632,21 @@ export default function FieldNewPage() {
     useEffect(() => {
         if (step !== "measure") return;
 
+        // ✅ TTS Noise Reduction: Only speak when ALL points are filled
+        // This prevents "Too small" warnings while user is typing "2" for "2300"
+        const isWidthFilled = widthPoints.every(v => v > 0);
+        const isHeightFilled = heightPoints.every(v => v > 0);
+        const isFullyFilled = isWidthFilled && isHeightFilled;
+
+        if (!isFullyFilled) return;
+
         // Measurement Warnings
         if (whWarnings.length > 0) {
             speakKo(`주의. ${whWarnings[0]}`);
         } else if (hasDiffWarn) {
             speakKo("실측 편차가 큽니다. 추가 자재 비용 가능성을 안내해 주세요.");
         }
-    }, [whWarnings, hasDiffWarn, step]);
+    }, [whWarnings, hasDiffWarn, step, widthPoints, heightPoints]);
 
     useEffect(() => {
         // Pricing Errors (Global check)
@@ -628,6 +776,11 @@ export default function FieldNewPage() {
                 // ✅ One-Slide Specifics
                 oneSlideMount: door === "1W_SLIDING" ? oneSlideMount : null,
                 autoParts: door === "1W_SLIDING" ? autoParts : null,
+
+                // ✅ Frame Logic
+                frameFinish,
+                frameColor,
+                frameColorExtra,
             },
             trust_check: trust,
 
@@ -642,7 +795,9 @@ export default function FieldNewPage() {
             extras: extrasPayload,
             memo: memo,
             customer_message: customerMessage,
-            status: "SAVED"
+            status: "SAVED",
+            install_date: installDate,
+            install_time: installTime,
         };
 
         try {
@@ -668,11 +823,17 @@ export default function FieldNewPage() {
         const openDirLabel = openDirection === "LEFT_TO_RIGHT" ? "좌→우" : "우→좌";
         const glassInfo = getGlassOption(glassType);
 
+        // Frame Label Generation
+        const finishLabel = frameFinish === "ANOD" ? "아노다이징" : "불소도장";
+        const colorLabel = COLOR_LABEL[frameColor] ?? frameColor;
+        const frameExtraTxt = frameColorExtra > 0 ? `(+${formatWon(frameColorExtra)})` : "(기본)";
+        const detailedFrameLabel = `${finishLabel} / ${colorLabel} ${frameExtraTxt}`;
+
         return buildCustomerMessage({
             customer,
             doorKindLabel,
             openDirectionLabel: openDirLabel,
-            frameColorLabel: frameColor,
+            frameColorLabel: detailedFrameLabel, // ✅ Updated
             glassLabel: glassInfo.label,
             widthPoints: widthPoints,
             heightPoints: heightPoints,
@@ -685,12 +846,26 @@ export default function FieldNewPage() {
             installPrice: pricing.installWon,
             requestDate: installDate,
             requestTime: installTime,
-            memo
+            memo,
+            discounts: {
+                event: promoDiscountWon,
+                measurer: measurerDiscountWon,
+                resale: resaleDiscountWon
+            },
+            extras: {
+                demolition: extraDemolition,
+                carpentry: extraCarpentry,
+                carpentryMaterialWon,
+                movingFloor
+            }
         });
     }, [
         customer, door, oneSlideMount, openDirection, frameColor, glassType,
         widthPoints, heightPoints, confirmedW, confirmedH, autoParts, pricing,
-        installDate, installTime, memo
+        installDate, installTime, memo,
+        promoDiscountWon, measurerDiscountWon, resaleDiscountWon,
+        extraDemolition, extraCarpentry, carpentryMaterialWon, movingFloor,
+        frameFinish, frameColorExtra
     ]);
 
     // Copy Message
@@ -868,6 +1043,27 @@ export default function FieldNewPage() {
                     <div className="grid gap-4">
                         <h3 className="text-xl font-bold">4. 옵션 선택</h3>
 
+                        {/* Installation Schedule */}
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                            <label className="block text-sm mb-2 text-zinc-400">시공 예정일 (실측일로 부터 7일 이후)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="date"
+                                    required
+                                    min={new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]}
+                                    value={installDate}
+                                    onChange={(e) => setInstallDate(e.target.value)}
+                                    className="flex-1 bg-zinc-900 border border-zinc-700 text-white p-3 rounded-xl [color-scheme:dark]"
+                                />
+                                <input
+                                    type="time"
+                                    value={installTime}
+                                    onChange={(e) => setInstallTime(e.target.value)}
+                                    className="w-32 bg-zinc-900 border border-zinc-700 text-white p-3 rounded-xl [color-scheme:dark]"
+                                />
+                            </div>
+                        </div>
+
                         {/* Open Direction */}
                         <div className="p-3 bg-white/5 rounded-xl border border-white/10">
                             <label className="block text-sm mb-2 text-zinc-400">열림 방향</label>
@@ -892,13 +1088,16 @@ export default function FieldNewPage() {
                             <label className="block text-sm mb-2 text-zinc-400">프레임 종류</label>
                             <select
                                 value={frameFinish}
-                                onChange={(e) => setFrameFinish(e.target.value as any)}
-                                className="w-full bg-zinc-900 border border-zinc-700 text-white p-3 rounded-xl"
+                                onChange={(e) => setFrameFinish(e.target.value as FrameFinish)}
+                                className="w-full bg-zinc-900 border border-zinc-700 text-white p-3 rounded-xl disabled:opacity-50"
+                                disabled={!!policy.forcedFinish}
                             >
-                                <option value="FLUORO">불소도장 (기본)</option>
-                                <option value="ANODIZING">아노다이징 (+5만)</option>
-                                <option value="SHEET">시트지 랩핑 (+6만)</option>
+                                <option value="FLUORO">불소도장</option>
+                                <option value="ANOD">아노다이징</option>
                             </select>
+                            {policy.forcedFinish && (
+                                <div className="text-xs text-amber-500 mt-1">※ 이 도어는 {policy.forcedFinish === "ANOD" ? "아노다이징" : "불소도장"} 기본입니다.</div>
+                            )}
                         </div>
 
                         {/* Frame Color */}
@@ -906,16 +1105,22 @@ export default function FieldNewPage() {
                             <label className="block text-sm mb-2 text-zinc-400">프레임 색상</label>
                             <select
                                 value={frameColor}
-                                onChange={(e) => setFrameColor(e.target.value as any)}
+                                onChange={(e) => setFrameColor(e.target.value as FrameColor)}
                                 className="w-full bg-zinc-900 border border-zinc-700 text-white p-3 rounded-xl"
                             >
-                                <option value="WHITE">화이트</option>
-                                <option value="BLACK">블랙</option>
-                                <option value="CHAMPAGNE_GOLD">샴페인골드</option>
-                                <option value="ROSE_GOLD">로즈골드</option>
-                                <option value="WOOD">우드(시트)</option>
-                                <option value="CREAM_WOOD">크림우드(시트)</option>
+                                {policy.allowedColors.map((c) => {
+                                    const extra = policy.extraByColor(c);
+                                    return (
+                                        <option key={c} value={c}>
+                                            {COLOR_LABEL[c]}
+                                            {extra > 0 ? ` (+${extra.toLocaleString()}원)` : " (기본)"}
+                                        </option>
+                                    );
+                                })}
                             </select>
+                            <div className="text-xs text-zinc-400 mt-2 opacity-80">
+                                {policy.note}
+                            </div>
                         </div>
 
                         {/* Glass Type */}
@@ -952,21 +1157,105 @@ export default function FieldNewPage() {
                             </div>
                         </div>
 
+                        <InstallPhotosSection />
+
+                        {/* Extras */}
                         {/* Extras */}
                         <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-3">
                             <label className="block text-sm text-zinc-400">추가 시공</label>
+
+                            {/* 철거: 15만 */}
                             <label className="flex items-center gap-2 p-2 rounded bg-black/20">
                                 <input type="checkbox" checked={extraDemolition} onChange={(e) => setExtraDemolition(e.target.checked)} className="w-5 h-5" />
-                                <span>기존 중문 철거 (+5만)</span>
+                                <span>기존 중문 철거 (+15만)</span>
                             </label>
-                            <label className="flex items-center gap-2 p-2 rounded bg-black/20">
-                                <input type="checkbox" checked={extraCarpentry} onChange={(e) => setExtraCarpentry(e.target.checked)} className="w-5 h-5" />
-                                <span>목공 마감 작업 (+10만)</span>
-                            </label>
-                            <label className="flex items-center gap-2 p-2 rounded bg-black/20">
-                                <input type="checkbox" checked={extraMoving} onChange={(e) => setExtraMoving(e.target.checked)} className="w-5 h-5" />
-                                <span>엘리베이터 없는 계단 양중 (+5만)</span>
-                            </label>
+
+                            {/* 목공: 시공 5만 + 자재비 */}
+                            <div className="p-2 rounded bg-black/20 space-y-2">
+                                <label className="flex items-center gap-2">
+                                    <input type="checkbox" checked={extraCarpentry} onChange={(e) => setExtraCarpentry(e.target.checked)} className="w-5 h-5" />
+                                    <span>목공 마감 작업 (시공 5만)</span>
+                                </label>
+                                {extraCarpentry && (
+                                    <div className="pl-7 flex items-center gap-2">
+                                        <span className="text-xs text-zinc-400">자재비(실비)</span>
+                                        <input
+                                            type="number"
+                                            value={carpentryMaterialWon || ""}
+                                            onChange={(e) => setCarpentryMaterialWon(Number(e.target.value))}
+                                            placeholder="0"
+                                            className="w-24 bg-black/30 text-white border border-white/10 rounded px-2 py-1 text-sm"
+                                        />
+                                        <span className="text-xs">원</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 양중비: 층수 선택 */}
+                            <div className="p-2 rounded bg-black/20 flex items-center justify-between">
+                                <span className="text-sm">짐 양중비 (계단)</span>
+                                <select
+                                    value={movingFloor}
+                                    onChange={(e) => setMovingFloor(Number(e.target.value))}
+                                    className="bg-black/30 text-white border border-white/10 rounded px-2 py-1 text-sm"
+                                >
+                                    <option value={1}>1층 / 해당없음</option>
+                                    <option value={2}>2층 (+1만)</option>
+                                    <option value={3}>3층 (+2만)</option>
+                                    <option value={4}>4층 (+3만)</option>
+                                    <option value={5}>5층 (+4만)</option>
+                                    <option value={6}>6층 (+5만)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* ✅ 현장 할인 섹션 (Moved to Step 4) */}
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-4">
+                            <h4 className="font-bold text-sm text-zinc-300">📉 현장 할인 적용</h4>
+
+                            {/* 이벤트 할인 */}
+                            <div className="space-y-1">
+                                <label className="text-xs text-zinc-400">이벤트 할인</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white"
+                                        placeholder="0"
+                                        value={promoDiscountWon || ""}
+                                        onChange={(e) => setPromoDiscountWon(Number(e.target.value))}
+                                    />
+                                    <button
+                                        onClick={() => setPromoDiscountWon(150000)}
+                                        className="bg-yellow-600/20 border border-yellow-600/50 text-yellow-400 px-3 rounded-lg text-sm font-bold whitespace-nowrap hover:bg-yellow-600/30 transition-colors"
+                                    >
+                                        추천 15만
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 실측자 할인 */}
+                            <div className="space-y-1">
+                                <label className="text-xs text-zinc-400">실측자 할인</label>
+                                <input
+                                    type="number"
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white"
+                                    placeholder="0"
+                                    value={measurerDiscountWon || ""}
+                                    onChange={(e) => setMeasurerDiscountWon(Number(e.target.value))}
+                                />
+                            </div>
+
+                            {/* 재판매 할인 */}
+                            <div className="space-y-1">
+                                <label className="text-xs text-zinc-400">재판매 할인</label>
+                                <input
+                                    type="number"
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white"
+                                    placeholder="0"
+                                    value={resaleDiscountWon || ""}
+                                    onChange={(e) => setResaleDiscountWon(Number(e.target.value))}
+                                />
+                            </div>
                         </div>
                     </div>
                 );
@@ -1007,7 +1296,9 @@ export default function FieldNewPage() {
             case "send":
                 return (
                     <div className="grid gap-4">
-                        <h3 className="text-xl font-bold">6. 전송 및 저장</h3>
+                        <h3 className="text-xl font-bold">6. 전송 및 저장 (최종확인)</h3>
+
+
 
                         <div className="p-4 bg-zinc-900 rounded-xl space-y-3 text-sm border border-zinc-700">
                             <div className="flex justify-between"><span>자재비(확정)</span> <span className="text-white font-bold">{formatWon(pricing.materialWon)}</span></div>

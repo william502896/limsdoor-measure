@@ -398,6 +398,116 @@ export function useStoreHook() {
 
     }, [global.currentUser?.id, global.currentUser?.currentTenantId]); // Reload when user or tenant context changes
 
+    // 3. Sync Customers from Supabase (Sync Request Fix)
+    // The previous implementation relied solely on LocalStorage, leading to empty lists if LS was clear.
+    // We now fetch from the DB to ensure data availability.
+    useEffect(() => {
+        if (!loaded || !global.currentUser) return;
+
+        const syncCustomers = async () => {
+            const { createSupabaseBrowser } = await import("./supabaseClient");
+            const supabase = createSupabaseBrowser();
+
+            const { data, error } = await supabase
+                .from("crm_customers")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (data && !error) {
+                const mapped: Customer[] = data.map((d: any) => ({
+                    id: d.id,
+                    name: d.name,
+                    phone: d.phone,
+                    address: d.address,
+                    memo: d.memo,
+                    createdAt: d.created_at // Map DB created_at to store createdAt
+                }));
+
+                setTenantData(prev => ({
+                    ...prev,
+                    customers: mapped
+                }));
+            } else if (error) {
+                console.error("Failed to sync customers:", error);
+            }
+        };
+
+        syncCustomers();
+        syncCustomers();
+    }, [loaded, global.currentUser?.currentTenantId]);
+
+    // 4. Sync Orders (Schedules) from Supabase
+    useEffect(() => {
+        if (!loaded || !global.currentUser) return;
+
+        const syncOrders = async () => {
+            const { createSupabaseBrowser } = await import("./supabaseClient");
+            const supabase = createSupabaseBrowser();
+
+            // Fetch Schedules
+            const { data: schedData, error: schedError } = await supabase
+                .from("sc_schedules")
+                .select("*")
+                .order("scheduled_date", { ascending: true });
+
+            if (schedError) {
+                console.error("Failed to sync schedules:", schedError);
+                return;
+            }
+
+            // Fetch POs (for items)
+            const { data: poData, error: poError } = await supabase
+                .from("sc_purchase_orders")
+                .select("schedule_id, items_json, status, as_defect, service_type"); // Minimal fields
+
+            if (schedData) {
+                const mappedOrders: Order[] = schedData.map((s: any) => {
+                    // Find linked PO
+                    const linkedPO = poData?.find((p: any) => p.schedule_id === s.id);
+                    // Map Items
+                    let items: any[] = [];
+                    if (linkedPO && linkedPO.items_json && Array.isArray(linkedPO.items_json)) {
+                        items = linkedPO.items_json.map((i: any) => ({
+                            category: i.category || "미지정",
+                            detail: i.design || i.detail || "",
+                            location: "",
+                            glass: i.glass || "",
+                            color: i.color || "",
+                            width: Number(i.width) || 0,
+                            height: Number(i.height) || 0,
+                            quantity: Number(i.qty) || 1
+                        }));
+                    } else {
+                        // Fallback dummy item if no PO (shouldn't happen for valid orders but safety)
+                        items = [{ category: s.title || "미지정", detail: "", quantity: 1 }];
+                    }
+
+                    return {
+                        id: s.id,
+                        customerId: s.customer_id,
+                        tenantId: "t_head",
+                        items: items,
+                        status: s.status,
+                        serviceType: linkedPO?.service_type || s.service_type || "NEW_INSTALL", // prioritizing PO or fallback
+                        asDefect: linkedPO?.as_defect,
+                        installDate: s.scheduled_date, // Map scheduled_date -> installDate
+                        measureDate: s.created_at, // Fallback for measureDate
+                        createdAt: s.created_at,
+                        estPrice: 0, finalPrice: 0, deposit: 0, balance: 0,
+                        paymentStatus: "Unpaid", measureFiles: [], installFiles: [], asHistory: []
+                    };
+                });
+
+                setTenantData(prev => ({
+                    ...prev,
+                    orders: mappedOrders
+                }));
+            }
+        };
+
+        syncOrders();
+    }, [loaded, global.currentUser?.currentTenantId]);
+
     // ACTIONS =================================================================
 
     const saveGlobal = (newState: GlobalState) => {

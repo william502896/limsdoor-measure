@@ -1,4 +1,5 @@
-import { PRICING_DATA as pricingData } from './misotech-price-data';
+import { PRICING_DATA } from './misotech-price-data';
+const pricingData = PRICING_DATA as any;
 
 // --- Mappings & Constants ---
 
